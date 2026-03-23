@@ -10,7 +10,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Etapa 2: Ejecución (Runtime)
-FROM eclipse-temurin-21-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 # Crear un usuario no-root por seguridad (Práctica de Arquitectura Profesional)
