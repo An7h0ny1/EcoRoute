@@ -333,11 +333,11 @@ spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
 # Puerto de la aplicaci�n (CubePath suele usar el 8080)
 server.port=${PORT:8080}
 
-# Permitir que Spring ejecute el archivo import.sql al iniciar
+# Permitir que Spring ejecute el archivo data.sql al iniciar
 spring.sql.init.mode=always
 
 # Activar Virtual Threads (Project Loom) para que cada petici�n sea un hilo virtual
-spring.threads.virtual.enabled=true===== ./resources/import.sql =====
+spring.threads.virtual.enabled=true===== ./resources/data.sql =====
 -- Peajes reales en rutas desde Pasto (Valores aproximados Categoría 1)
 INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Placer (Pasto-Ipiales)', 13200.0, 0.8256, -77.6111);
 INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje Daza (Pasto-Buesaco)', 11800.0, 1.3055, -77.2555);
