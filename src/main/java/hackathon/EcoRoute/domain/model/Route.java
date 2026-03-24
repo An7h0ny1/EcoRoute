@@ -1,0 +1,19 @@
+package hackathon.EcoRoute.domain.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.util.List;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class Route {
+    private String id;
+    private List<Delivery> deliveries;
+    private RouteCost cost;
+    private double totalDistanceKm;
+}

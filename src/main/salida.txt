@@ -1,0 +1,441 @@
+===== ./java/hackathon/EcoRoute/application/ports/in/OptimizeRouteUseCase.java =====
+package hackathon.EcoRoute.application.ports.in;
+
+import hackathon.EcoRoute.domain.model.Delivery;
+import hackathon.EcoRoute.domain.model.Route;
+
+import java.util.List;
+
+public interface OptimizeRouteUseCase {
+    Route execute(List<Delivery> deliveries);
+}
+===== ./java/hackathon/EcoRoute/application/ports/in/TollRepositoryPort.java =====
+package hackathon.EcoRoute.application.ports.in;
+
+public interface TollRepositoryPort {
+    double calculateTollsForRoute(double startLat, double startLon, double endLat, double endLon);
+}
+===== ./java/hackathon/EcoRoute/application/service/RouteOptimizationService.java =====
+package hackathon.EcoRoute.application.service;
+
+import hackathon.EcoRoute.application.ports.in.OptimizeRouteUseCase;
+import hackathon.EcoRoute.application.ports.out.TollRepositoryPort;
+import hackathon.EcoRoute.domain.model.Delivery;
+import hackathon.EcoRoute.domain.model.Route;
+import hackathon.EcoRoute.domain.model.RouteCost;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class RouteOptimizationService implements OptimizeRouteUseCase {
+
+    private final TollRepositoryPort tollRepositoryPort;
+    private static final double FUEL_PRICE_PER_KM = 500.0; // Valor base en COP
+
+    @Override
+    public Route execute(List<Delivery> deliveries) {
+        // En este paso del MVP, asumimos que el orden recibido es el inicial
+        // Más adelante implementaremos el algoritmo de ordenamiento
+
+        double totalDistance = calculateTotalDistance(deliveries);
+        double fuelCost = totalDistance * FUEL_PRICE_PER_KM;
+
+        // Simulación inicial de peajes usando el puerto de salida
+        double tollCost = 0;
+        if (deliveries.size() > 1) {
+            Delivery first = deliveries.get(0);
+            Delivery last = deliveries.get(deliveries.size() - 1);
+            tollCost = tollRepositoryPort.calculateTollsForRoute(
+                    first.getLatitude(), first.getLongitude(),
+                    last.getLatitude(), last.getLongitude()
+            );
+        }
+
+        RouteCost cost = new RouteCost(fuelCost, tollCost, 0);
+        cost.calculateTotal();
+
+        Route route = new Route();
+        route.setId(UUID.randomUUID().toString());
+        route.setDeliveries(deliveries);
+        route.setCost(cost);
+        route.setTotalDistanceKm(totalDistance);
+
+        return route;
+    }
+
+    private double calculateTotalDistance(List<Delivery> deliveries) {
+        // Lógica simple de distancia acumulada para el MVP inicial
+        return deliveries.size() * 5.0; // Simulación: 5km por entrega
+    }
+}
+===== ./java/hackathon/EcoRoute/controller/HealthController.java =====
+package hackathon.EcoRoute.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Date;
+import java.util.Map;
+
+@RestController
+public class HealthController {
+
+    @GetMapping("/health")
+    public Map<String, Object> checkHealth() {
+        return Map.of(
+                "status", "UP",
+                "message", "EcoRoute API is running on Houston Server",
+                "timestamp", new Date()
+        );
+    }
+}
+===== ./java/hackathon/EcoRoute/domain/model/Delivery.java =====
+package hackathon.EcoRoute.domain.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class Delivery {
+    private String id;
+    private String address;
+    private double latitude;
+    private double longitude;
+    private String customerName;
+    private double weightKg;
+}
+===== ./java/hackathon/EcoRoute/domain/model/Route.java =====
+package hackathon.EcoRoute.domain.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.util.List;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class Route {
+    private String id;
+    private List<Delivery> deliveries;
+    private RouteCost cost;
+    private double totalDistanceKm;
+}
+===== ./java/hackathon/EcoRoute/domain/model/RouteCost.java =====
+package hackathon.EcoRoute.domain.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class RouteCost {
+    private double fuelCost;
+    private double tollCost;
+    private double totalCost;
+
+    public void calculateTotal() {
+        this.totalCost = this.fuelCost + this.tollCost;
+    }
+}
+===== ./java/hackathon/EcoRoute/EcoRouteApplication.java =====
+package hackathon.EcoRoute;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class EcoRouteApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(EcoRouteApplication.class, args);
+	}
+
+}
+===== ./java/hackathon/EcoRoute/infrastructure/adapters/persistence/JpaTollRepository.java =====
+package hackathon.EcoRoute.infrastructure.adapters.persistence;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface JpaTollRepository extends JpaRepository<TollEntity, Long> {
+    // Aquí podrías añadir métodos de búsqueda por cercanía geográfica si fuera necesario
+}
+===== ./java/hackathon/EcoRoute/infrastructure/adapters/persistence/TollEntity.java =====
+package hackathon.EcoRoute.infrastructure.adapters.persistence;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "tolls")
+@Getter
+@Setter
+public class TollEntity {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private double price;
+    private double latitude;
+    private double longitude;
+}
+===== ./java/hackathon/EcoRoute/infrastructure/adapters/persistence/TollPersistenceAdapter.java =====
+package hackathon.EcoRoute.infrastructure.adapters.persistence;
+
+import hackathon.EcoRoute.application.ports.out.TollRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+@Component
+@RequiredArgsConstructor
+public class TollPersistenceAdapter implements TollRepositoryPort {
+
+    private final JpaTollRepository jpaTollRepository;
+
+    @Override
+    public double calculateTollsForRoute(double startLat, double startLon, double endLat, double endLon) {
+        // Por ahora, para el MVP, sumamos el precio de todos los peajes
+        // registrados en la base de datos para simular el costo.
+        // En el Paso 9 lo haremos más preciso por coordenadas.
+        return jpaTollRepository.findAll()
+                .stream()
+                .mapToDouble(TollEntity::getPrice)
+                .sum();
+    }
+}
+===== ./java/hackathon/EcoRoute/infrastructure/adapters/util/CsvParser.java =====
+package hackathon.EcoRoute.infrastructure.adapters.util;
+
+import hackathon.EcoRoute.domain.model.Delivery;
+import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Component
+public class CsvParser {
+    public List<Delivery> parse(MultipartFile file) throws Exception {
+        List<Delivery> deliveries = new ArrayList<>();
+
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            String line;
+            // Saltamos la cabecera si el CSV la tiene
+            br.readLine();
+
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length >= 4) {
+                    Delivery delivery = new Delivery();
+                    delivery.setId(UUID.randomUUID().toString());
+                    delivery.setCustomerName(values[0].trim());
+                    delivery.setAddress(values[1].trim());
+                    delivery.setLatitude(Double.parseDouble(values[2].trim()));
+                    delivery.setLongitude(Double.parseDouble(values[3].trim()));
+                    // El peso es opcional en este MVP, por ahora 0.0 o el valor si existe
+                    delivery.setWeightKg(values.length > 4 ? Double.parseDouble(values[4].trim()) : 0.0);
+
+                    deliveries.add(delivery);
+                }
+            }
+        }
+        return deliveries;
+    }
+}
+===== ./java/hackathon/EcoRoute/infrastructure/adapters/web/RouteController.java =====
+package hackathon.EcoRoute.infrastructure.adapters.web;
+
+import hackathon.EcoRoute.application.ports.in.OptimizeRouteUseCase;
+import hackathon.EcoRoute.domain.model.Delivery;
+import hackathon.EcoRoute.domain.model.Route;
+import hackathon.EcoRoute.infrastructure.adapters.util.CsvParser;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+
+@Controller
+@RequiredArgsConstructor
+public class RouteController {
+
+    private final OptimizeRouteUseCase optimizeRouteUseCase;
+    private final CsvParser csvParser;
+
+    @GetMapping("/")
+    public String index() {
+        return "index"; // Esto buscará index.html en la carpeta templates
+    }
+
+    @PostMapping("/optimize")
+    public String optimize(@RequestParam("file") MultipartFile file, Model model) {
+        try {
+            // Convertimos el CSV a lista de Deliveries
+            List<Delivery> deliveries = csvParser.parse(file);
+
+            // Ejecutamos el caso de uso (Lógica de Negocio)
+            Route optimizedRoute = optimizeRouteUseCase.execute(deliveries);
+
+            // Pasamos el resultado al modelo de la vista
+            model.addAttribute("route", optimizedRoute);
+
+            // HTMX: Devolvemos solo el fragmento de los resultados para actualizar la página parcialmente
+            return "fragments/results :: route-results";
+
+        } catch (Exception e) {
+            model.addAttribute("error", "Error processing CSV: " + e.getMessage());
+            return "fragments/error :: error-message";
+        }
+    }
+}
+===== ./resources/application.properties =====
+spring.application.name=EcoRoute
+
+# Configuraci�n de la Base de Datos (Usa variables de entorno para CubePath)
+spring.datasource.url=${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecoroute}
+spring.datasource.username=${SPRING_DATASOURCE_USERNAME:postgres}
+spring.datasource.password=${SPRING_DATASOURCE_PASSWORD:password}
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# Configuraci�n de JPA / Hibernate
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+
+# Puerto de la aplicaci�n (CubePath suele usar el 8080)
+server.port=${PORT:8080}
+
+# Permitir que Spring ejecute el archivo import.sql al iniciar
+spring.sql.init.mode=always
+
+# Activar Virtual Threads (Project Loom) para que cada petici�n sea un hilo virtual
+spring.threads.virtual.enabled=true===== ./resources/import.sql =====
+-- Peajes reales en rutas desde Pasto (Valores aproximados Categoría 1)
+INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Placer (Pasto-Ipiales)', 13200.0, 0.8256, -77.6111);
+INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje Daza (Pasto-Buesaco)', 11800.0, 1.3055, -77.2555);
+INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (Pasto-Mocoa)', 10500.0, 1.1666, -77.1500);===== ./resources/templates/fragments/results.html =====
+<div th:fragment="route-results" class="space-y-6 animate-fade-in">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500">
+            <p class="text-slate-400 text-sm uppercase tracking-wider">Total Cost</p>
+            <h3 class="text-3xl font-bold text-white" th:text="${'$' + #numbers.formatDecimal(route.cost.totalCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+        </div>
+        <div class="glass rounded-2xl p-6 border-l-4 border-blue-500">
+            <p class="text-slate-400 text-sm uppercase tracking-wider">Fuel</p>
+            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.fuelCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+        </div>
+        <div class="glass rounded-2xl p-6 border-l-4 border-amber-500">
+            <p class="text-slate-400 text-sm uppercase tracking-wider">Tolls</p>
+            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.tollCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+        </div>
+    </div>
+
+    <div class="glass rounded-2xl p-8 shadow-xl">
+        <h2 class="text-xl font-semibold mb-6 flex items-center">
+            <svg class="w-6 h-6 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Optimized Sequence
+        </h2>
+        <div class="space-y-4">
+            <div th:each="delivery, iter : ${route.deliveries}" class="flex items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                <span class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-sm font-bold text-slate-900 mr-4" th:text="${iter.count}"></span>
+                <div>
+                    <p class="font-medium text-white" th:text="${delivery.customerName}"></p>
+                    <p class="text-sm text-slate-400" th:text="${delivery.address}"></p>
+                </div>
+            </div>
+        </div>
+
+        <button class="w-full mt-8 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20">
+            Send Route to Driver (WhatsApp)
+        </button>
+    </div>
+</div>===== ./resources/templates/index.html =====
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoRoute | Smart Logistics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="text-slate-200 font-sans p-4 md:p-10">
+<div class="max-w-4xl mx-auto">
+    <header class="mb-10 text-center">
+        <h1 class="text-4xl font-bold text-white mb-2">EcoRoute <span class="text-emerald-400">🌱</span></h1>
+        <p class="text-slate-400">Optimize your last-mile delivery costs in real-time.</p>
+    </header>
+
+    <section class="glass rounded-3xl p-8 mb-10 shadow-2xl">
+        <h2 class="text-xl font-semibold mb-6">1. Upload your Deliveries</h2>
+
+        <form id="upload-form"
+              hx-post="/optimize"
+              hx-target="#results-container"
+              hx-encoding="multipart/form-data"
+              class="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-2xl p-10 hover:border-emerald-500 transition-colors cursor-pointer group">
+
+            <input type="file" name="file" id="fileInput" class="hidden" accept=".csv" onchange="document.getElementById('file-name').textContent = this.files[0].name">
+
+            <label for="fileInput" class="flex flex-col items-center cursor-pointer">
+                <svg class="w-12 h-12 text-slate-500 group-hover:text-emerald-400 mb-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <span id="file-name" class="text-slate-400 font-medium">Click to select or drag your CSV file</span>
+                <span class="text-xs text-slate-500 mt-2">Format: Name, Address, Lat, Lon, Weight</span>
+            </label>
+
+            <button type="submit" class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105">
+                Optimize Now
+            </button>
+        </form>
+    </section>
+
+    <div id="results-container">
+    </div>
+</div>
+
+<div class="htmx-indicator fixed bottom-5 right-5 bg-emerald-500 text-white px-4 py-2 rounded-full shadow-lg">
+    Calculating Route...
+</div>
+</body>
+</html>

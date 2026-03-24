@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoRoute | Smart Logistics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="text-slate-200 font-sans p-4 md:p-10">
+<div class="max-w-4xl mx-auto">
+    <header class="mb-10 text-center">
+        <h1 class="text-4xl font-bold text-white mb-2">EcoRoute <span class="text-emerald-400">🌱</span></h1>
+        <p class="text-slate-400">Optimize your last-mile delivery costs in real-time.</p>
+    </header>
+
+    <section class="glass rounded-3xl p-8 mb-10 shadow-2xl">
+        <h2 class="text-xl font-semibold mb-6">1. Upload your Deliveries</h2>
+
+        <form id="upload-form"
+              hx-post="/optimize"
+              hx-target="#results-container"
+              hx-encoding="multipart/form-data"
+              class="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-2xl p-10 hover:border-emerald-500 transition-colors cursor-pointer group">
+
+            <input type="file" name="file" id="fileInput" class="hidden" accept=".csv" onchange="document.getElementById('file-name').textContent = this.files[0].name">
+
+            <label for="fileInput" class="flex flex-col items-center cursor-pointer">
+                <svg class="w-12 h-12 text-slate-500 group-hover:text-emerald-400 mb-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <span id="file-name" class="text-slate-400 font-medium">Click to select or drag your CSV file</span>
+                <span class="text-xs text-slate-500 mt-2">Format: Name, Address, Lat, Lon, Weight</span>
+            </label>
+
+            <button type="submit" class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105">
+                Optimize Now
+            </button>
+        </form>
+    </section>
+
+    <div id="results-container">
+    </div>
+</div>
+
+<div class="htmx-indicator fixed bottom-5 right-5 bg-emerald-500 text-white px-4 py-2 rounded-full shadow-lg">
+    Calculating Route...
+</div>
+</body>
+</html>
