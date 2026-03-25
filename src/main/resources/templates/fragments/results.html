@@ -1,4 +1,39 @@
 <div th:fragment="route-results" class="space-y-6 animate-fade-in">
+    <div class="glass rounded-2xl p-4 shadow-xl">
+        <h2 class="text-xl font-semibold mb-4 flex items-center italic">
+            <span class="text-emerald-400 mr-2">📍</span> Route Visualization (Pasto, Nariño)
+        </h2>
+        <div id="map" class="h-80 w-full rounded-xl border border-slate-700 shadow-inner"></div>
+    </div>
+
+    <script th:inline="javascript">
+        // 1. Inicializar el mapa centrado en Pasto
+        var map = L.map('map').setView([1.2136, -77.2811], 13);
+
+        // 2. Capa de mapa (OpenStreetMap con estilo oscuro opcional)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // 3. Obtener los puntos de entrega desde el modelo de Java (Thymeleaf)
+        /*[[${route.deliveries}]]*/ var deliveries = [];
+
+        var points = [];
+        deliveries.forEach(function(d, index) {
+            var marker = L.marker([d.latitude, d.longitude]).addTo(map)
+                .bindPopup("<b>" + (index + 1) + ". " + d.customerName + "</b><br>" + d.address);
+            points.push([d.latitude, d.longitude]);
+        });
+
+        // 4. Dibujar la línea de la ruta (Polyline)
+        if (points.length > 1) {
+            var polyline = L.polyline(points, {color: '#10b981', weight: 4, opacity: 0.7}).addTo(map);
+            map.fitBounds(polyline.getBounds(), {padding: [20, 20]});
+        }
+    </script>
+
+</div>
+<div th:fragment="route-results" class="space-y-6 animate-fade-in">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500">
             <p class="text-slate-400 text-sm uppercase tracking-wider">Total Cost</p>

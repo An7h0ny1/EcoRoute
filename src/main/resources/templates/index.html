@@ -6,6 +6,8 @@
     <title>EcoRoute | Smart Logistics</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         .glass {
             background: rgba(255, 255, 255, 0.1);
@@ -44,8 +46,13 @@
                 <span class="text-xs text-slate-500 mt-2">Format: Name, Address, Lat, Lon, Weight</span>
             </label>
 
-            <button type="submit" class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105">
-                Optimize Now
+            <button type="submit"
+                    class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105 flex items-center gap-2">
+                <span>Optimize Now</span>
+                <svg id="spinner" class="htmx-indicator animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
             </button>
         </form>
     </section>
