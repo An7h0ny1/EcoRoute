@@ -31,7 +31,7 @@
         }).addTo(map);
 
         // 3. Obtener los puntos de entrega desde el modelo de Java (Thymeleaf)
-        /*[[${route.deliveries}]]*/ var deliveries = [];
+        var deliveries = /*[[${route.deliveries}]]*/ [];
 
         var points = [];
         deliveries.forEach(function(d, index) {
