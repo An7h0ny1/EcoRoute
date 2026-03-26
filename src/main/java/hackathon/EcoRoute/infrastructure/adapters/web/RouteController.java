@@ -29,20 +29,22 @@ public class RouteController {
     @PostMapping("/optimize")
     public String optimize(@RequestParam("file") MultipartFile file, Model model) {
         try {
-            // Convertimos el CSV a lista de Deliveries
+            // 1. Parseo real del CSV subido por el usuario
             List<Delivery> deliveries = csvParser.parse(file);
 
-            // Ejecutamos el caso de uso (Lógica de Negocio)
+            // 2. Ejecución de la lógica de optimización (Haversine + ArcGIS + OSRM)
+            // Aquí es donde se calcula el ahorro real y los peajes de la ANI
             Route optimizedRoute = optimizeRouteUseCase.execute(deliveries);
 
-            // Pasamos el resultado al modelo de la vista
+            // 3. Pasamos el objeto enriquecido a la vista
             model.addAttribute("route", optimizedRoute);
 
-            // HTMX: Devolvemos solo el fragmento de los resultados para actualizar la página parcialmente
+            // 4. HTMX: Devolvemos solo el fragmento de resultados
+            // Esto evita que la página parpadee y da una sensación de fluidez total
             return "fragments/results :: route-results";
 
         } catch (Exception e) {
-            model.addAttribute("error", "Error processing CSV: " + e.getMessage());
+            model.addAttribute("error", "Error procesando el archivo: " + e.getMessage());
             return "fragments/error :: error-message";
         }
     }

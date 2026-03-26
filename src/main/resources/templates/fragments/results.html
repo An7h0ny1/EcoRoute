@@ -1,69 +1,140 @@
 <div th:fragment="route-results" class="space-y-6 animate-fade-in">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500">
-            <p class="text-slate-400 text-sm uppercase tracking-wider">Total Cost</p>
-            <h3 class="text-3xl font-bold text-white" th:text="${'$' + #numbers.formatDecimal(route.cost.totalCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+        <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500 shadow-2xl">
+            <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Total Est. Cost</p>
+            <h3 class="text-3xl font-black text-white" th:text="${'$' + #numbers.formatDecimal(route.cost.total, 0, 'POINT', 0, 'COMMA')}"></h3>
         </div>
         <div class="glass rounded-2xl p-6 border-l-4 border-blue-500">
-            <p class="text-slate-400 text-sm uppercase tracking-wider">Fuel</p>
-            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.fuelCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+            <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Fuel (Real Distance)</p>
+            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.fuelCost, 0, 'POINT', 0, 'COMMA')}"></h3>
         </div>
         <div class="glass rounded-2xl p-6 border-l-4 border-amber-500">
-            <p class="text-slate-400 text-sm uppercase tracking-wider">Tolls</p>
-            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.tollCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+            <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Tolls (ANI/INVIAS)</p>
+            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.tollCost, 0, 'POINT', 0, 'COMMA')}"></h3>
         </div>
     </div>
 
-    <div class="glass rounded-2xl p-4 shadow-xl">
-        <h2 class="text-xl font-semibold mb-4 flex items-center italic">
-            <span class="text-emerald-400 mr-2">📍</span> Route Visualization (Pasto, Nariño)
-        </h2>
-        <div id="map" class="h-80 w-full rounded-xl border border-slate-700 shadow-inner"></div>
+    <div class="glass rounded-3xl p-4 shadow-2xl border border-white/10">
+        <div class="flex justify-between items-center mb-4 px-2">
+            <h2 class="text-lg font-bold text-white flex items-center">
+                <span class="bg-emerald-500/20 p-2 rounded-lg mr-3">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A2 2 0 013 15.487V5.412a2 2 0 011.187-1.808l5.447-2.724a2 2 0 011.732 0l5.447 2.724A2 2 0 0118 5.412v10.075a2 2 0 01-1.187 1.808l-5.447 2.724a2 2 0 01-1.732 0z"></path></svg>
+                </span>
+                Live Route Trace <span class="ml-2 text-xs font-normal text-slate-400" th:text="'(' + ${#numbers.formatDecimal(route.totalDistanceKm, 1, 1)} + ' km)'"></span>
+            </h2>
+        </div>
+        <div id="map" class="h-96 w-full rounded-2xl border border-white/5 shadow-inner overflow-hidden"></div>
     </div>
 
     <script th:inline="javascript">
-        // 1. Inicializar el mapa centrado en Pasto
-        var map = L.map('map').setView([1.2136, -77.2811], 13);
+        // Inicialización segura del mapa
+        (function() {
+            var deliveries = /*[[${route.deliveries}]]*/ [];
+            if (!deliveries || deliveries.length === 0) return;
 
-        // 2. Capa de mapa (OpenStreetMap con estilo oscuro opcional)
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
+            // Centrar en la primera parada (Pasto/Nariño)
+            var map = L.map('map').setView([deliveries[0].latitude, deliveries[0].longitude], 12);
 
-        // 3. Obtener los puntos de entrega desde el modelo de Java (Thymeleaf)
-        var deliveries = /*[[${route.deliveries}]]*/ [];
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '©OpenStreetMap ©CARTO'
+            }).addTo(map);
 
-        var points = [];
-        deliveries.forEach(function(d, index) {
-            var marker = L.marker([d.latitude, d.longitude]).addTo(map)
-                .bindPopup("<b>" + (index + 1) + ". " + d.customerName + "</b><br>" + d.address);
-            points.push([d.latitude, d.longitude]);
-        });
+            var waypoints = deliveries.map(d => [d.latitude, d.longitude]);
+            var osrmPoints = deliveries.map(d => d.longitude + ',' + d.latitude).join(';');
 
-        // 4. Dibujar la línea de la ruta (Polyline)
-        if (points.length > 1) {
-            var polyline = L.polyline(points, {color: '#10b981', weight: 4, opacity: 0.7}).addTo(map);
-            map.fitBounds(polyline.getBounds(), {padding: [20, 20]});
-        }
+            // Dibujar Marcadores con estilo personalizado
+            deliveries.forEach((d, i) => {
+                var icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div class='bg-emerald-500 text-slate-900 w-6 h-6 rounded-full flex items-center justify-center font-bold border-2 border-white/20'>${i+1}</div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+                L.marker([d.latitude, d.longitude], {icon: icon}).addTo(map)
+                 .bindPopup(`<b>${d.customerName}</b><br>${d.address}`);
+            });
+
+            // Marcadores de peajes detectados
+            var detectedTolls = /*[[${route.cost.detectedTolls}]]*/ [];
+            detectedTolls.forEach(function(toll) {
+                var tollIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style='background:#f59e0b;color:#1e293b;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;border:2px solid rgba(255,255,255,0.3)'>$</div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+                L.marker([toll.latitude, toll.longitude], {icon: tollIcon})
+                 .addTo(map)
+                 .bindPopup(`<b>💰 ${toll.name}</b><br>Costo: $${toll.cost.toLocaleString('es-CO')} COP`);
+            });
+            // Geometría ya calculada por el backend - sin segunda llamada a OSRM
+            var routeGeometry = /*[[${route.routeGeometry}]]*/ null;
+            if (routeGeometry) {
+                try {
+                    var geomObj = typeof routeGeometry === 'string' ? JSON.parse(routeGeometry) : routeGeometry;
+                    var routeLayer = L.geoJSON(geomObj, {
+                        style: { color: '#10b981', weight: 6, opacity: 0.6, lineJoin: 'round' }
+                    }).addTo(map);
+                    map.fitBounds(routeLayer.getBounds(), {padding: [50, 50]});
+                } catch(e) {
+                    console.error('Error dibujando ruta:', e);
+                }
+            }
+        })();
     </script>
 
-    <div class="glass rounded-2xl p-8 shadow-xl">
-        <h2 class="text-xl font-semibold mb-6 flex items-center">
-            <svg class="w-6 h-6 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            Optimized Sequence
-        </h2>
-        <div class="space-y-4">
-            <div th:each="delivery, iter : ${route.deliveries}" class="flex items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                <span class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-sm font-bold text-slate-900 mr-4" th:text="${iter.count}"></span>
-                <div>
-                    <p class="font-medium text-white" th:text="${delivery.customerName}"></p>
-                    <p class="text-sm text-slate-400" th:text="${delivery.address}"></p>
+    <div class="glass rounded-3xl p-6 border border-white/5 shadow-xl">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-white">Optimized Delivery Sequence</h2>
+            <button onclick="sendWhatsApp()"
+                    class="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-5 rounded-full transition-all transform hover:scale-105">
+                <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                Enviar a conductor
+            </button>
+        </div>
+        <div class="grid grid-cols-1 gap-3">
+            <div th:each="delivery, iter : ${route.deliveries}"
+                 class="group flex items-center p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all cursor-default">
+                <span class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-mono font-bold mr-4 group-hover:scale-110 transition-transform"
+                      th:text="${iter.count}"></span>
+                <div class="flex-grow">
+                    <p class="font-bold text-slate-100" th:text="${delivery.customerName}"></p>
+                    <p class="text-xs text-slate-400 uppercase tracking-tighter" th:text="${delivery.address}"></p>
+                </div>
+                <div class="text-right hidden md:block text-[10px] text-slate-500 font-mono">
+                    <p th:text="${#numbers.formatDecimal(delivery.latitude, 1, 4)} + ', ' + ${#numbers.formatDecimal(delivery.longitude, 1, 4)}"></p>
                 </div>
             </div>
         </div>
-
-        <button class="w-full mt-8 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20">
-            Send Route to Driver (WhatsApp)
-        </button>
     </div>
+    <script th:inline="javascript">
+        function sendWhatsApp() {
+            var deliveries = /*[[${route.deliveries}]]*/ [];
+            var tolls = /*[[${route.cost.detectedTolls}]]*/ [];
+            var totalCost = /*[[${route.cost.total}]]*/ 0;
+            var distance = /*[[${route.totalDistanceKm}]]*/ 0;
+
+            var msg = "🚛 *RUTA OPTIMIZADA - EcoRoute*\n\n";
+            msg += "📦 *Secuencia de entregas:*\n";
+            deliveries.forEach(function(d, i) {
+                msg += (i+1) + ". " + d.customerName + " - " + d.address + "\n";
+                msg += "   📍 https://maps.google.com/?q=" + d.latitude + "," + d.longitude + "\n";
+            });
+
+            msg += "\n💰 *Peajes en ruta:*\n";
+            if (tolls.length === 0) {
+                msg += "Sin peajes detectados\n";
+            } else {
+                tolls.forEach(function(t) {
+                    msg += "⚠️ " + t.name + ": $" + t.cost.toLocaleString('es-CO') + " COP\n";
+                });
+            }
+
+            msg += "\n📊 *Resumen:*\n";
+            msg += "📏 Distancia: " + Math.round(distance * 10) / 10 + " km\n";
+            msg += "💵 Costo total estimado: $" + Math.round(totalCost).toLocaleString('es-CO') + " COP";
+
+            window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
+        }
+    </script>
 </div>

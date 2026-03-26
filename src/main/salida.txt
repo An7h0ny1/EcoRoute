@@ -9,11 +9,15 @@ import java.util.List;
 public interface OptimizeRouteUseCase {
     Route execute(List<Delivery> deliveries);
 }
-===== ./java/hackathon/EcoRoute/application/ports/in/TollRepositoryPort.java =====
-package hackathon.EcoRoute.application.ports.in;
+===== ./java/hackathon/EcoRoute/application/ports/out/TollRepositoryPort.java =====
+package hackathon.EcoRoute.application.ports.out;
+
+import hackathon.EcoRoute.domain.model.Delivery;
+
+import java.util.List;
 
 public interface TollRepositoryPort {
-    double calculateTollsForRoute(double startLat, double startLon, double endLat, double endLon);
+    double calculateTollsForRoute(List<Delivery> deliveries);
 }
 ===== ./java/hackathon/EcoRoute/application/service/RouteOptimizationService.java =====
 package hackathon.EcoRoute.application.service;
@@ -26,6 +30,7 @@ import hackathon.EcoRoute.domain.model.RouteCost;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,38 +43,70 @@ public class RouteOptimizationService implements OptimizeRouteUseCase {
 
     @Override
     public Route execute(List<Delivery> deliveries) {
-        // En este paso del MVP, asumimos que el orden recibido es el inicial
-        // Más adelante implementaremos el algoritmo de ordenamiento
+        if (deliveries == null || deliveries.isEmpty()) return new Route();
 
-        double totalDistance = calculateTotalDistance(deliveries);
-        double fuelCost = totalDistance * FUEL_PRICE_PER_KM;
+        // 1. Algoritmo Greedy para ordenar paradas por cercanía (Tu lógica actual)
+        List<Delivery> optimizedList = new ArrayList<>();
+        List<Delivery> remaining = new ArrayList<>(deliveries);
+        Delivery current = remaining.remove(0);
+        optimizedList.add(current);
 
-        // Simulación inicial de peajes usando el puerto de salida
-        double tollCost = 0;
-        if (deliveries.size() > 1) {
-            Delivery first = deliveries.get(0);
-            Delivery last = deliveries.get(deliveries.size() - 1);
-            tollCost = tollRepositoryPort.calculateTollsForRoute(
-                    first.getLatitude(), first.getLongitude(),
-                    last.getLatitude(), last.getLongitude()
-            );
+        while (!remaining.isEmpty()) {
+            Delivery next = findClosest(current, remaining);
+            optimizedList.add(next);
+            remaining.remove(next);
+            current = next;
         }
 
+        // 2. Cálculo de Distancia Real (Aquí podrías sumar distancias de OSRM luego)
+        double totalDistance = calculateTotalDistance(optimizedList);
+        double fuelCost = totalDistance * FUEL_PRICE_PER_KM;
+
+        // 3. ¡EL MOMENTO DE LA VERDAD!: Cálculo de peajes con datos de ArcGIS y OSRM
+        // Pasamos la lista OPTIMIZADA para que el adaptador analice el trayecto real
+        double tollCost = tollRepositoryPort.calculateTollsForRoute(optimizedList);
+
+        // 4. Construcción del objeto de costo
         RouteCost cost = new RouteCost(fuelCost, tollCost, 0);
         cost.calculateTotal();
 
         Route route = new Route();
         route.setId(UUID.randomUUID().toString());
-        route.setDeliveries(deliveries);
+        route.setDeliveries(optimizedList); // Guardamos la lista ya ordenada
         route.setCost(cost);
         route.setTotalDistanceKm(totalDistance);
 
         return route;
     }
 
+    // 1. Distancia Real Acumulada (Ya no es size * 5.0)
     private double calculateTotalDistance(List<Delivery> deliveries) {
-        // Lógica simple de distancia acumulada para el MVP inicial
-        return deliveries.size() * 5.0; // Simulación: 5km por entrega
+        double total = 0.0;
+        for (int i = 0; i < deliveries.size() - 1; i++) {
+            total += calculateHaversine(deliveries.get(i), deliveries.get(i + 1));
+        }
+        return total;
+    }
+
+    // 2. Buscador del más cercano usando Haversine real
+    private Delivery findClosest(Delivery current, List<Delivery> others) {
+        return others.stream()
+                .min((d1, d2) -> Double.compare(
+                        calculateHaversine(current, d1),
+                        calculateHaversine(current, d2)))
+                .get();
+    }
+
+    // 3. Fórmula de Haversine (Matemática real, cero inventos)
+    private double calculateHaversine(Delivery d1, Delivery d2) {
+        double R = 6371; // Radio de la Tierra en km
+        double dLat = Math.toRadians(d2.getLatitude() - d1.getLatitude());
+        double dLon = Math.toRadians(d2.getLongitude() - d1.getLongitude());
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(d1.getLatitude())) * Math.cos(Math.toRadians(d2.getLatitude())) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }
 ===== ./java/hackathon/EcoRoute/controller/HealthController.java =====
@@ -148,10 +185,10 @@ import lombok.Setter;
 public class RouteCost {
     private double fuelCost;
     private double tollCost;
-    private double totalCost;
+    private double total;
 
     public void calculateTotal() {
-        this.totalCost = this.fuelCost + this.tollCost;
+        this.total = this.fuelCost + this.tollCost;
     }
 }
 ===== ./java/hackathon/EcoRoute/EcoRouteApplication.java =====
@@ -203,24 +240,143 @@ public class TollEntity {
 package hackathon.EcoRoute.infrastructure.adapters.persistence;
 
 import hackathon.EcoRoute.application.ports.out.TollRepositoryPort;
+import hackathon.EcoRoute.domain.model.Delivery;
+import hackathon.EcoRoute.infrastructure.adapters.util.TollScraper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class TollPersistenceAdapter implements TollRepositoryPort {
 
-    private final JpaTollRepository jpaTollRepository;
+    private final TollScraper tollScraper;
+    private final WebClient webClient = WebClient.builder().build();
 
     @Override
-    public double calculateTollsForRoute(double startLat, double startLon, double endLat, double endLon) {
-        // Por ahora, para el MVP, sumamos el precio de todos los peajes
-        // registrados en la base de datos para simular el costo.
-        // En el Paso 9 lo haremos más preciso por coordenadas.
-        return jpaTollRepository.findAll()
-                .stream()
-                .mapToDouble(TollEntity::getPrice)
-                .sum();
+    public double calculateTollsForRoute(List<Delivery> deliveries) {
+        if (deliveries == null || deliveries.size() < 2) return 0.0;
+
+        // 1. Obtenemos peajes (Solo una vez)
+        List<Map<String, Object>> liveTolls = tollScraper.getLiveTolls();
+
+        // 2. Construimos el String de coordenadas: lon,lat;lon,lat;lon,lat...
+        StringBuilder pointsBuilder = new StringBuilder();
+        for (Delivery d : deliveries) {
+            if (pointsBuilder.length() > 0) pointsBuilder.append(";");
+            pointsBuilder.append(String.format(Locale.US, "%f,%f", d.getLongitude(), d.getLatitude()));
+        }
+
+        // 3. UNA SOLA llamada a OSRM para toda la ruta
+        String osrmUrl = "https://router.project-osrm.org/route/v1/driving/"
+                + pointsBuilder.toString()
+                + "?overview=full&geometries=geojson";
+
+        try {
+            Map<String, Object> response = webClient.get()
+                    .uri(osrmUrl)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .block(); // Gracias a Loom (Virtual Threads), esto no bloquea el hilo real, pero solo esperamos 1 vez.
+
+            if (response != null && response.containsKey("routes")) {
+                return processTollMatching(response, liveTolls, deliveries);
+            }
+        } catch (Exception e) {
+            System.err.println("Error en Batch OSRM: " + e.getMessage());
+        }
+
+        return 0.0;
+    }
+
+
+    private double processTollMatching(Map<String, Object> osrmResponse, List<Map<String, Object>> features, List<Delivery> deliveries) {
+        double totalCost = 0.0;
+        try {
+            List<Map<String, Object>> routes = (List<Map<String, Object>>) osrmResponse.get("routes");
+            Map<String, Object> geometry = (Map<String, Object>) routes.get(0).get("geometry");
+            List<List<Double>> coordinates = (List<List<Double>>) geometry.get("coordinates");
+
+            for (Map<String, Object> feature : features) {
+                Map<String, Object> attr = (Map<String, Object>) feature.get("attributes");
+                Map<String, Object> geom = (Map<String, Object>) feature.get("geometry");
+
+                double tollLon = Double.parseDouble(geom.get("x").toString());
+                double tollLat = Double.parseDouble(geom.get("y").toString());
+
+                // Optimización: Solo calculamos Haversine si el punto está en el "Bounding Box" aproximado
+                for (List<Double> coord : coordinates) {
+                    double pLon = coord.get(0);
+                    double pLat = coord.get(1);
+
+                    // Quick check: ¿Está a menos de ~0.01 grados (~1km)? (Evita CPU costosa)
+                    if (Math.abs(pLat - tollLat) < 0.01 && Math.abs(pLon - tollLon) < 0.01) {
+                        if (haversine(pLat, pLon, tollLat, tollLon) < 0.5) { // 500 metros real
+                            // Determinar categoría de peaje según peso del vehículo
+                            String tollCategory = getTollCategory(deliveries.get(0).getWeightKg());
+                            String priceField = "F_cat_" + tollCategory + "_";
+                            
+                            Object priceObj = attr.get(priceField);
+                            if (priceObj == null) priceObj = attr.get("F_cat_1_"); // fallback
+                            totalCost += (priceObj != null) ? Double.parseDouble(priceObj.toString()) : 0.0;
+                            break; // Pasamos al siguiente peaje
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error en matching: " + e.getMessage());
+        }
+        return totalCost;
+    }
+
+    // Cálculo matemático real (Fórmula de Haversine) - Cero inventos
+    private double haversine(double lat1, double lon1, double lat2, double lon2) {
+        double R = 6371; // Radio de la Tierra en KM
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    private double extractLongitude(Map<String, Object> feature) {
+        // 1. Intentamos buscar el campo LONGITUDE en los atributos
+        Map<String, Object> attributes = (Map<String, Object>) feature.get("attributes");
+        if (attributes != null && attributes.get("LONGITUDE") != null) {
+            return Double.parseDouble(attributes.get("LONGITUDE").toString());
+        }
+
+        // 2. Si no está en atributos, ArcGIS SIEMPRE lo envía en el objeto 'geometry'
+        Map<String, Object> geometry = (Map<String, Object>) feature.get("geometry");
+        if (geometry != null && geometry.get("x") != null) {
+            // En ArcGIS, 'x' es Longitud y 'y' es Latitud
+            return Double.parseDouble(geometry.get("x").toString());
+        }
+
+        // 3. Si llegamos aquí y no hay datos, lanzamos una excepción o log
+        // ¡NADA DE NÚMEROS QUEMADOS!
+        throw new RuntimeException("No se pudo obtener la longitud real del peaje en ArcGIS");
+    }
+
+    // Determinar categoría de peaje según peso del vehículo
+    private String getTollCategory(double weightKg) {
+        if (weightKg <= 3500) return "1";          // Automóviles, motos, camionetas
+        else if (weightKg <= 8500) return "2";      // Buses, camiones pequeños
+        else if (weightKg <= 12500) return "3";     // Camiones medianos
+        else if (weightKg <= 20500) return "4";     // Camiones grandes
+        else if (weightKg <= 26500) return "5";     // Tractocamiones 2 ejes
+        else if (weightKg <= 32500) return "6";     // Tractocamiones 3 ejes
+        else if (weightKg <= 38500) return "7";     // Tractocamiones 4 ejes
+        else if (weightKg <= 44500) return "8";     // Tractocamiones 5 ejes
+        else return "9";                            // Tractocamiones 6+ ejes
     }
 }
 ===== ./java/hackathon/EcoRoute/infrastructure/adapters/util/CsvParser.java =====
@@ -249,20 +405,94 @@ public class CsvParser {
             while ((line = br.readLine()) != null) {
                 String[] values = line.split(",");
                 if (values.length >= 4) {
+                    // Validar coordenadas
+                    double lat, lon, weight = 0.0;
+                    try {
+                        lat = Double.parseDouble(values[2].trim());
+                        lon = Double.parseDouble(values[3].trim());
+                        
+                        // Validar rangos de Colombia
+                        if (lat < -4.5 || lat > 13.0 || lon < -79.0 || lon > -66.0) {
+                            System.err.println("Coordenadas fuera de rango de Colombia: " + lat + ", " + lon);
+                            continue;
+                        }
+                        
+                        // Peso opcional
+                        if (values.length > 4) {
+                            weight = Double.parseDouble(values[4].trim());
+                            if (weight < 0 || weight > 50000) { // límite razonable
+                                weight = 1000.0; // valor por defecto
+                            }
+                        }
+                        
+                    } catch (NumberFormatException e) {
+                        System.err.println("Error parseando coordenadas en línea: " + line);
+                        continue;
+                    }
+                    
                     Delivery delivery = new Delivery();
                     delivery.setId(UUID.randomUUID().toString());
                     delivery.setCustomerName(values[0].trim());
                     delivery.setAddress(values[1].trim());
-                    delivery.setLatitude(Double.parseDouble(values[2].trim()));
-                    delivery.setLongitude(Double.parseDouble(values[3].trim()));
-                    // El peso es opcional en este MVP, por ahora 0.0 o el valor si existe
-                    delivery.setWeightKg(values.length > 4 ? Double.parseDouble(values[4].trim()) : 0.0);
+                    delivery.setLatitude(lat);
+                    delivery.setLongitude(lon);
+                    delivery.setWeightKg(weight);
 
                     deliveries.add(delivery);
+                } else {
+                    System.err.println("Línea con formato inválido (menos de 4 campos): " + line);
                 }
             }
         }
+        
+        if (deliveries.isEmpty()) {
+            throw new Exception("No se pudieron procesar entregas válidas del CSV");
+        }
+        
         return deliveries;
+    }
+}
+===== ./java/hackathon/EcoRoute/infrastructure/adapters/util/TollScraper.java =====
+package hackathon.EcoRoute.infrastructure.adapters.util;
+
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import org.springframework.core.ParameterizedTypeReference;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+@Component
+public class TollScraper {
+
+    private final WebClient webClient;
+
+    public TollScraper() {
+        this.webClient = WebClient.builder().build();
+    }
+
+    // URL completa de ArcGIS con todos los campos relevantes para peajes
+    private static final String ARCGIS_URL = "https://services7.arcgis.com/8o2hyYSY6GDe4YX6/arcgis/rest/services/PeajesColombia/FeatureServer/0/query?where=1%3D1&outFields=Cruce_Base_INVIAS,F_a_cargo_de_,F_administra_,F_cat_1_,F_cat_2_,F_cat_3_,F_cat_4_,F_cat_5_,F_cat_6_,F_cat_7_,F_cat_8_,F_cat_9_,F_cat_EAE_,F_cat_EC_,F_cat_E_,F_cat_IEEE_,F_cat_IEE_,F_cat_IE_,F_cat_IE_10_,F_cat_IIA_,F_cat_IIE_,F_cat_IIIE_,F_cat_IVE_,F_cat_VE_,F_cat_VIE_,F_cat_VIIE_,F_codigo_via_,F_sector_,F_sentido_,telefono_peaje_,telefono_grua_,F_territoria_,F_ubicacion_,LATITUDE,LONGITUDE&returnGeometry=true&f=json";
+
+    public List<Map<String, Object>> getLiveTolls() {
+        try {
+            Mono<Map<String, Object>> responseMono = webClient.get()
+                    .uri(ARCGIS_URL)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            Map<String, Object> response = responseMono.block();
+
+            if (response != null && response.containsKey("features")) {
+                // Devolvemos la lista de 'features' completa (contiene attributes Y geometry)
+                return (List<Map<String, Object>>) response.get("features");
+            }
+        } catch (Exception e) {
+            System.err.println("Error consumiendo ArcGIS: " + e.getMessage());
+        }
+        return new ArrayList<>();
     }
 }
 ===== ./java/hackathon/EcoRoute/infrastructure/adapters/web/RouteController.java =====
@@ -297,20 +527,22 @@ public class RouteController {
     @PostMapping("/optimize")
     public String optimize(@RequestParam("file") MultipartFile file, Model model) {
         try {
-            // Convertimos el CSV a lista de Deliveries
+            // 1. Parseo real del CSV subido por el usuario
             List<Delivery> deliveries = csvParser.parse(file);
 
-            // Ejecutamos el caso de uso (Lógica de Negocio)
+            // 2. Ejecución de la lógica de optimización (Haversine + ArcGIS + OSRM)
+            // Aquí es donde se calcula el ahorro real y los peajes de la ANI
             Route optimizedRoute = optimizeRouteUseCase.execute(deliveries);
 
-            // Pasamos el resultado al modelo de la vista
+            // 3. Pasamos el objeto enriquecido a la vista
             model.addAttribute("route", optimizedRoute);
 
-            // HTMX: Devolvemos solo el fragmento de los resultados para actualizar la página parcialmente
+            // 4. HTMX: Devolvemos solo el fragmento de resultados
+            // Esto evita que la página parpadee y da una sensación de fluidez total
             return "fragments/results :: route-results";
 
         } catch (Exception e) {
-            model.addAttribute("error", "Error processing CSV: " + e.getMessage());
+            model.addAttribute("error", "Error procesando el archivo: " + e.getMessage());
             return "fragments/error :: error-message";
         }
     }
@@ -318,64 +550,117 @@ public class RouteController {
 ===== ./resources/application.properties =====
 spring.application.name=EcoRoute
 
-# Configuraci�n de la Base de Datos (Usa variables de entorno para CubePath)
+# Configuracion de la Base de Datos (Usa variables de entorno para CubePath)
 spring.datasource.url=${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ecoroute}
 spring.datasource.username=${SPRING_DATASOURCE_USERNAME:postgres}
 spring.datasource.password=${SPRING_DATASOURCE_PASSWORD:password}
 spring.datasource.driver-class-name=org.postgresql.Driver
 
-# Configuraci�n de JPA / Hibernate
+# Configuracion de JPA / Hibernate
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
 spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
 
-# Puerto de la aplicaci�n (CubePath suele usar el 8080)
+# Puerto de la aplicacion (CubePath suele usar el 8080)
 server.port=${PORT:8080}
 
-# Permitir que Spring ejecute el archivo data.sql al iniciar
-spring.sql.init.mode=always
-
-# Activar Virtual Threads (Project Loom) para que cada petici�n sea un hilo virtual
+# Activar Virtual Threads (Project Loom) para que cada peticion sea un hilo virtual
 spring.threads.virtual.enabled=true===== ./resources/data.sql =====
 -- Peajes reales en rutas desde Pasto (Valores aproximados Categoría 1)
 INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Placer (Pasto-Ipiales)', 13200.0, 0.8256, -77.6111);
 INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje Daza (Pasto-Buesaco)', 11800.0, 1.3055, -77.2555);
-INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (Pasto-Mocoa)', 10500.0, 1.1666, -77.1500);===== ./resources/templates/fragments/results.html =====
+INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (Pasto-Mocoa)', 10500.0, 1.1666, -77.1500);===== ./resources/templates/fragments/error.html =====
+<div th:fragment="error-message" class="animate-bounce bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-red-200 flex items-center gap-3">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <span th:text="${error}">An error occurred while processing the file.</span>
+</div>===== ./resources/templates/fragments/results.html =====
 <div th:fragment="route-results" class="space-y-6 animate-fade-in">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500">
-            <p class="text-slate-400 text-sm uppercase tracking-wider">Total Cost</p>
-            <h3 class="text-3xl font-bold text-white" th:text="${'$' + #numbers.formatDecimal(route.cost.totalCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+        <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500 shadow-2xl">
+            <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Total Est. Cost</p>
+            <h3 class="text-3xl font-black text-white" th:text="${'$' + #numbers.formatDecimal(route.cost.total, 0, 'POINT', 0, 'COMMA')}"></h3>
         </div>
         <div class="glass rounded-2xl p-6 border-l-4 border-blue-500">
-            <p class="text-slate-400 text-sm uppercase tracking-wider">Fuel</p>
-            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.fuelCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+            <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Fuel (Real Distance)</p>
+            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.fuelCost, 0, 'POINT', 0, 'COMMA')}"></h3>
         </div>
         <div class="glass rounded-2xl p-6 border-l-4 border-amber-500">
-            <p class="text-slate-400 text-sm uppercase tracking-wider">Tolls</p>
-            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.tollCost, 0, 'COMMA', 0, 'POINT')}"></h3>
+            <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Tolls (ANI/INVIAS)</p>
+            <h3 class="text-2xl font-semibold text-slate-200" th:text="${'$' + #numbers.formatDecimal(route.cost.tollCost, 0, 'POINT', 0, 'COMMA')}"></h3>
         </div>
     </div>
 
-    <div class="glass rounded-2xl p-8 shadow-xl">
-        <h2 class="text-xl font-semibold mb-6 flex items-center">
-            <svg class="w-6 h-6 mr-2 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            Optimized Sequence
-        </h2>
-        <div class="space-y-4">
-            <div th:each="delivery, iter : ${route.deliveries}" class="flex items-center p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                <span class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-sm font-bold text-slate-900 mr-4" th:text="${iter.count}"></span>
-                <div>
-                    <p class="font-medium text-white" th:text="${delivery.customerName}"></p>
-                    <p class="text-sm text-slate-400" th:text="${delivery.address}"></p>
+    <div class="glass rounded-3xl p-4 shadow-2xl border border-white/10">
+        <div class="flex justify-between items-center mb-4 px-2">
+            <h2 class="text-lg font-bold text-white flex items-center">
+                <span class="bg-emerald-500/20 p-2 rounded-lg mr-3">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A2 2 0 013 15.487V5.412a2 2 0 011.187-1.808l5.447-2.724a2 2 0 011.732 0l5.447 2.724A2 2 0 0118 5.412v10.075a2 2 0 01-1.187 1.808l-5.447 2.724a2 2 0 01-1.732 0z"></path></svg>
+                </span>
+                Live Route Trace <span class="ml-2 text-xs font-normal text-slate-400" th:text="'(' + ${route.totalDistanceKm} + ' km)'"></span>
+            </h2>
+        </div>
+        <div id="map" class="h-96 w-full rounded-2xl border border-white/5 shadow-inner overflow-hidden"></div>
+    </div>
+
+    <script th:inline="javascript">
+        // Inicialización segura del mapa
+        (function() {
+            var deliveries = /*[[${route.deliveries}]]*/ [];
+            if (!deliveries || deliveries.length === 0) return;
+
+            // Centrar en la primera parada (Pasto/Nariño)
+            var map = L.map('map').setView([deliveries[0].latitude, deliveries[0].longitude], 12);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '©OpenStreetMap ©CARTO'
+            }).addTo(map);
+
+            var waypoints = deliveries.map(d => [d.latitude, d.longitude]);
+            var osrmPoints = deliveries.map(d => d.longitude + ',' + d.latitude).join(';');
+
+            // Dibujar Marcadores con estilo personalizado
+            deliveries.forEach((d, i) => {
+                var icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div class='bg-emerald-500 text-slate-900 w-6 h-6 rounded-full flex items-center justify-center font-bold border-2 border-white/20'>${i+1}</div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+                L.marker([d.latitude, d.longitude], {icon: icon}).addTo(map)
+                 .bindPopup(`<b>${d.customerName}</b><br>${d.address}`);
+            });
+
+            // Trazar la ruta real OSRM (Misma lógica que el Backend)
+            fetch(`https://router.project-osrm.org/route/v1/driving/${osrmPoints}?overview=full&geometries=geojson`)
+                .then(r => r.json())
+                .then(data => {
+                    var route = L.geoJSON(data.routes[0].geometry, {
+                        style: { color: '#10b981', weight: 6, opacity: 0.6, lineJoin: 'round' }
+                    }).addTo(map);
+                    map.fitBounds(route.getBounds(), {padding: [50, 50]});
+                });
+        })();
+    </script>
+
+    <div class="glass rounded-3xl p-6 border border-white/5 shadow-xl">
+        <h2 class="text-xl font-bold text-white mb-6">Optimized Delivery Sequence</h2>
+        <div class="grid grid-cols-1 gap-3">
+            <div th:each="delivery, iter : ${route.deliveries}"
+                 class="group flex items-center p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all cursor-default">
+                <span class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-mono font-bold mr-4 group-hover:scale-110 transition-transform"
+                      th:text="${iter.count}"></span>
+                <div class="flex-grow">
+                    <p class="font-bold text-slate-100" th:text="${delivery.customerName}"></p>
+                    <p class="text-xs text-slate-400 uppercase tracking-tighter" th:text="${delivery.address}"></p>
+                </div>
+                <div class="text-right hidden md:block text-[10px] text-slate-500 font-mono">
+                    <p th:text="${#numbers.formatDecimal(delivery.latitude, 1, 4)} + ', ' + ${#numbers.formatDecimal(delivery.longitude, 1, 4)}"></p>
                 </div>
             </div>
         </div>
-
-        <button class="w-full mt-8 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/20">
-            Send Route to Driver (WhatsApp)
-        </button>
     </div>
 </div>===== ./resources/templates/index.html =====
 <!DOCTYPE html>
@@ -386,6 +671,8 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
     <title>EcoRoute | Smart Logistics</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         .glass {
             background: rgba(255, 255, 255, 0.1);
@@ -424,8 +711,13 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
                 <span class="text-xs text-slate-500 mt-2">Format: Name, Address, Lat, Lon, Weight</span>
             </label>
 
-            <button type="submit" class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105">
-                Optimize Now
+            <button type="submit"
+                    class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105 flex items-center gap-2">
+                <span>Optimize Now</span>
+                <svg id="spinner" class="htmx-indicator animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
             </button>
         </form>
     </section>

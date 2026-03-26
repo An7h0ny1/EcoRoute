@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -12,9 +15,17 @@ import lombok.Setter;
 public class RouteCost {
     private double fuelCost;
     private double tollCost;
-    private double totalCost;
+    private double total;
+    private List<DetectedToll> detectedTolls = new ArrayList<>();
+    private String routeGeometry; // GeoJSON para el mapa
+
+    public RouteCost(double fuelCost, double tollCost, double ignored) {
+        this.fuelCost = fuelCost;
+        this.tollCost = tollCost;
+        this.detectedTolls = new ArrayList<>();
+    }
 
     public void calculateTotal() {
-        this.totalCost = this.fuelCost + this.tollCost;
+        this.total = this.fuelCost + this.tollCost;
     }
 }

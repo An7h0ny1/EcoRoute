@@ -23,19 +23,50 @@ public class CsvParser {
             while ((line = br.readLine()) != null) {
                 String[] values = line.split(",");
                 if (values.length >= 4) {
+                    // Validar coordenadas
+                    double lat, lon, weight = 0.0;
+                    try {
+                        lat = Double.parseDouble(values[2].trim());
+                        lon = Double.parseDouble(values[3].trim());
+                        
+                        // Validar rangos de Colombia
+                        if (lat < -4.5 || lat > 13.0 || lon < -79.0 || lon > -66.0) {
+                            System.err.println("Coordenadas fuera de rango de Colombia: " + lat + ", " + lon);
+                            continue;
+                        }
+                        
+                        // Peso opcional
+                        if (values.length > 4) {
+                            weight = Double.parseDouble(values[4].trim());
+                            if (weight < 0 || weight > 50000) { // límite razonable
+                                weight = 1000.0; // valor por defecto
+                            }
+                        }
+                        
+                    } catch (NumberFormatException e) {
+                        System.err.println("Error parseando coordenadas en línea: " + line);
+                        continue;
+                    }
+                    
                     Delivery delivery = new Delivery();
                     delivery.setId(UUID.randomUUID().toString());
                     delivery.setCustomerName(values[0].trim());
                     delivery.setAddress(values[1].trim());
-                    delivery.setLatitude(Double.parseDouble(values[2].trim()));
-                    delivery.setLongitude(Double.parseDouble(values[3].trim()));
-                    // El peso es opcional en este MVP, por ahora 0.0 o el valor si existe
-                    delivery.setWeightKg(values.length > 4 ? Double.parseDouble(values[4].trim()) : 0.0);
+                    delivery.setLatitude(lat);
+                    delivery.setLongitude(lon);
+                    delivery.setWeightKg(weight);
 
                     deliveries.add(delivery);
+                } else {
+                    System.err.println("Línea con formato inválido (menos de 4 campos): " + line);
                 }
             }
         }
+        
+        if (deliveries.isEmpty()) {
+            throw new Exception("No se pudieron procesar entregas válidas del CSV");
+        }
+        
         return deliveries;
     }
 }

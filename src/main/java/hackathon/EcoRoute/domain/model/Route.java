@@ -16,4 +16,7 @@ public class Route {
     private List<Delivery> deliveries;
     private RouteCost cost;
     private double totalDistanceKm;
+    private String routeGeometry;
+    private double savingsPercent;
+    private double originalDistanceKm;
 }
