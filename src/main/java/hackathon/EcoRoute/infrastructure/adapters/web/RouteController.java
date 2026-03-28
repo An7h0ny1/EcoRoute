@@ -48,4 +48,19 @@ public class RouteController {
             return "fragments/error :: error-message";
         }
     }
+    @GetMapping(value = "/plantilla-ecoroute", produces = "text/csv")
+    @org.springframework.web.bind.annotation.ResponseBody
+    public String downloadTemplate(jakarta.servlet.http.HttpServletResponse response) {
+        response.setHeader("Content-Disposition", "attachment; filename=plantilla_ecoroute.csv");
+
+        // Plantilla intencionalmente DESORDENADA para probar el algoritmo TSP (Ruta Bogotá - Tunja)
+        // El orden real óptimo de sur a norte debería ser: Bogotá -> Chía -> Cajicá -> Tocancipá -> Villapinzón -> Tunja
+        return "Nombre,Dirección,Latitud,Longitud,PesoKg\n" +
+                "Bodega Norte,Calle 170 #67-51 Bogotá,4.7531,-74.0456,1500\n" +
+                "Cliente Tunja,Carrera 10 #20-50 Centro Tunja,5.5353,-73.3678,800\n" +
+                "Cliente Chía,Avenida Pradilla #4-31 Chía,4.8624,-74.0305,1200\n" +
+                "Cliente Villapinzón,Calle 4 #5-12 Villapinzón,5.2167,-73.6000,950\n" +
+                "Cliente Cajicá,Carrera 6 #3-20 Cajicá,4.9167,-74.0333,600\n" +
+                "Cliente Tocancipá,Zona Industrial Tocancipá,4.9653,-73.9130,1100";
+    }
 }

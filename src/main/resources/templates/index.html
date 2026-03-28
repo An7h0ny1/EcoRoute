@@ -3,69 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoRoute | Smart Logistics</title>
+    <title>EcoRoute 🌱 | Engine Logístico · Colombia</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        .glass {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap');
+
         body {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
             min-height: 100vh;
         }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Animación de carga */
+        #loading-overlay {
+            display: none;
+            opacity: 0;
+            transition: all 0.4s ease;
+        }
+        .htmx-request#loading-overlay {
+            display: flex !important;
+            opacity: 1;
+        }
+
+        .drag-over {
+            border-color: #10b981 !important;
+            background: rgba(16, 185, 129, 0.05) !important;
+            transform: scale(1.01);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
-<body class="text-slate-200 font-sans p-4 md:p-10">
-<div class="max-w-4xl mx-auto">
-    <header class="mb-10 text-center">
-        <h1 class="text-4xl font-bold text-white mb-2">EcoRoute <span class="text-emerald-400">🌱</span></h1>
-        <p class="text-slate-400">Optimize your last-mile delivery costs in real-time.</p>
+<body class="text-slate-300 p-4 md:p-8">
+
+<div class="max-w-5xl mx-auto">
+    <!-- HEADER -->
+    <header class="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
+        <div class="text-center md:text-left">
+            <div class="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1 rounded-full mb-4">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                Motor en Tiempo Real: OSRM + Datos ANI
+            </div>
+            <h1 class="text-5xl font-extrabold text-white tracking-tighter">EcoRoute<span class="text-emerald-500">.co</span></h1>
+            <p class="text-slate-500 mt-2 font-medium">Optimización de última milla con inteligencia geoespacial.</p>
+        </div>
+
+        <div class="flex gap-4">
+            <div class="glass p-4 rounded-2xl text-center min-w-[120px]">
+                <p class="text-[10px] uppercase font-bold text-slate-500 mb-1">Estado del Sistema</p>
+                <p class="text-emerald-400 text-sm font-black">OPERATIVO</p>
+            </div>
+        </div>
     </header>
 
-    <section class="glass rounded-3xl p-8 mb-10 shadow-2xl">
-        <h2 class="text-xl font-semibold mb-6">1. Upload your Deliveries</h2>
-
+    <!-- CARGA DE ARCHIVO -->
+    <section class="glass rounded-[2.5rem] p-2 mb-12 shadow-2xl">
         <form id="upload-form"
               hx-post="/optimize"
               hx-target="#results-container"
+              hx-indicator="#loading-overlay"
               hx-encoding="multipart/form-data"
-              class="flex flex-col items-center justify-center border-2 border-dashed border-slate-600 rounded-2xl p-10 hover:border-emerald-500 transition-colors cursor-pointer group">
+              class="relative group border-2 border-dashed border-slate-700/50 rounded-[2.2rem] p-12 transition-all flex flex-col items-center justify-center overflow-hidden">
 
-            <input type="file" name="file" id="fileInput" class="hidden" accept=".csv" onchange="document.getElementById('file-name').textContent = this.files[0].name">
+            <input type="file" name="file" id="fileInput" class="hidden" accept=".csv"
+                   onchange="updateFileName(this)">
 
-            <label for="fileInput" class="flex flex-col items-center cursor-pointer">
-                <svg class="w-12 h-12 text-slate-500 group-hover:text-emerald-400 mb-4 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                </svg>
-                <span id="file-name" class="text-slate-400 font-medium">Click to select or drag your CSV file</span>
-                <span class="text-xs text-slate-500 mt-2">Format: CustomerName, Address, Latitude, Longitude, WeightKg</span>
-                <a href="/example.csv" download class="mt-2 text-xs text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors">
-                    ⬇ Download example CSV (Bogotá → Girardot)
-                </a>
+
+            <!-- Decoración de fondo -->
+            <div class="absolute top-0 left-0 w-full h-full bg-emerald-500/0 group-hover:bg-emerald-500/5 transition-colors pointer-events-none"></div>
+
+            <label for="fileInput" class="cursor-pointer flex flex-col items-center relative z-10 text-center">
+                <div class="w-20 h-20 bg-slate-800 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-emerald-500 transition-all duration-500 shadow-2xl">
+                    <svg class="w-10 h-10 text-slate-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <h3 id="file-name" class="text-xl font-bold text-white mb-2 tracking-tight">Cargar Manifiesto de Carga</h3>
+                <p class="text-slate-500 text-sm max-w-xs">Arrastra tu archivo CSV con las entregas para iniciar la optimización de ruta y costos.</p>
             </label>
 
+            <div class="mt-6 relative z-10">
+                <a href="/plantilla-ecoroute" class="text-xs text-emerald-500/80 hover:text-emerald-400 flex items-center gap-2 transition-colors font-bold">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Descargar Plantilla de Ejemplo
+                </a>
+            </div>
+
             <button type="submit"
-                    class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-8 rounded-full transition-all transform hover:scale-105 flex items-center gap-2">
-                <span>Optimize Now</span>
-                <svg id="spinner" class="htmx-indicator animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                    class="mt-10 bg-white hover:bg-emerald-500 text-slate-950 hover:text-white font-black py-4 px-12 rounded-2xl transition-all duration-300 shadow-xl hover:shadow-emerald-500/20 active:scale-95 uppercase text-xs tracking-widest relative z-10">
+                Ejecutar Algoritmo
             </button>
+
+            <div class="mt-6 text-[10px] text-slate-600 font-mono tracking-widest uppercase">
+                Formato: Nombre, Dirección, Latitud, Longitud, Peso (Kg)
+            </div>
         </form>
     </section>
 
-    <div id="results-container">
+    <!-- CONTENEDOR DE RESULTADOS -->
+    <div id="results-container" class="min-h-[200px]">
+        <!-- Aquí HTMX inyectará los resultados -->
+        <div class="flex flex-col items-center justify-center py-20 text-slate-700 opacity-20">
+            <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <p class="font-bold tracking-[0.3em] uppercase text-xs">Esperando Datos de Entrada</p>
+        </div>
     </div>
 </div>
 
-<div class="htmx-indicator fixed bottom-5 right-5 bg-emerald-500 text-white px-4 py-2 rounded-full shadow-lg">
-    Calculating Route...
+<!-- OVERLAY DE CARGA (HOUSTON ENGINE) -->
+<div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[100]">
+    <div class="max-w-md w-full p-10 text-center">
+        <div class="relative mb-12">
+            <div class="absolute inset-0 bg-emerald-500/20 blur-3xl rounded-full animate-pulse"></div>
+            <div class="relative flex justify-center">
+                <svg class="animate-spin h-20 w-20 text-emerald-500" viewBox="0 0 24 24">
+                    <circle class="opacity-10" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                    <path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <h2 id="loading-title" class="text-2xl font-black text-white mb-2 tracking-tighter uppercase">Procesando Geometría</h2>
+        <p id="loading-subtitle" class="text-slate-500 font-mono text-xs mb-8 italic">Calculando matriz de distancias reales...</p>
+
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div id="loading-bar" class="bg-emerald-500 h-full w-0 transition-all duration-500 shadow-[0_0_15px_#10b981]"></div>
+        </div>
+    </div>
 </div>
+
+<script>
+    // Actualizar nombre del archivo y feedback visual
+    function updateFileName(input) {
+        const dropZone = document.getElementById('upload-form');
+        if (input.files && input.files.length > 0) {
+            document.getElementById('file-name').textContent = input.files[0].name;
+            dropZone.classList.add('border-emerald-500', 'bg-emerald-500/10');
+        } else {
+            document.getElementById('file-name').textContent = "Cargar Manifiesto de Carga";
+            dropZone.classList.remove('border-emerald-500', 'bg-emerald-500/10');
+        }
+    }
+
+    // Interceptar la petición de HTMX si no hay archivo (Validación Client-Side)
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            evt.preventDefault(); // Cancela la petición al backend
+
+            // Animación de error visual en el formulario
+            const form = document.getElementById('upload-form');
+            form.classList.add('animate-shake', 'border-red-500');
+            document.getElementById('file-name').textContent = "⚠️ Selecciona un archivo CSV";
+            setTimeout(() => form.classList.remove('animate-shake', 'border-red-500'), 1000);
+        }
+    });
+
+    // Lógica de simulación de carga adaptativa
+    const loadingSteps =[
+        { title: "Analizando Dataset", sub: "Validando coordenadas y pesos de carga...", pct: 20 },
+        { title: "Engine OSRM TSP", sub: "Calculando matriz matemática de distancias...", pct: 50 },
+        { title: "Geo-Filtro ANI", sub: "Buscando peajes con Bounding Box...", pct: 80 },
+        { title: "Eco-Matching", sub: "Procesando huella de carbono y finanzas...", pct: 95 }
+    ];
+
+    document.body.addEventListener('htmx:beforeRequest', function() {
+        let step = 0;
+        const bar = document.getElementById('loading-bar');
+        const title = document.getElementById('loading-title');
+        const sub = document.getElementById('loading-subtitle');
+
+        // Reset state
+        bar.style.width = '0%';
+
+        window.currentLoadingInterval = setInterval(() => {
+            if (step < loadingSteps.length) {
+                title.textContent = loadingSteps[step].title;
+                sub.textContent = loadingSteps[step].sub;
+                bar.style.width = loadingSteps[step].pct + '%';
+                step++;
+            }
+        }, 800); // Más rápido, el backend ahora es muy eficiente
+    });
+
+    document.body.addEventListener('htmx:afterRequest', function() {
+        clearInterval(window.currentLoadingInterval);
+        document.getElementById('loading-bar').style.width = '100%';
+    });
+
+    // Drag & Drop visual limits
+    const dropZone = document.getElementById('upload-form');
+    ['dragenter', 'dragover'].forEach(e => {
+        dropZone.addEventListener(e, (evt) => {
+            evt.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+    });
+    ['dragleave', 'drop'].forEach(e => {
+        dropZone.addEventListener(e, () => dropZone.classList.remove('drag-over'));
+    });
+</script>
 </body>
 </html>

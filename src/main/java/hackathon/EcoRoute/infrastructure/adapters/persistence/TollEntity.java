@@ -5,16 +5,23 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "tolls")
+@Table(name = "peajes")
 @Getter
 @Setter
 public class TollEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "id_peaje")
+    private Integer id;
 
+    @Column(name = "nombre")
     private String name;
-    private double price;
+
+    @Column(name = "lat")
     private double latitude;
+
+    @Column(name = "lon")
     private double longitude;
+
+    @Column(name = "estado")
+    private String estado;
 }

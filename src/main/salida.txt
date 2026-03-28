@@ -13,11 +13,12 @@ public interface OptimizeRouteUseCase {
 package hackathon.EcoRoute.application.ports.out;
 
 import hackathon.EcoRoute.domain.model.Delivery;
+import hackathon.EcoRoute.domain.model.RouteCost;
 
 import java.util.List;
 
 public interface TollRepositoryPort {
-    double calculateTollsForRoute(List<Delivery> deliveries);
+    RouteCost calculateTollsForRoute(List<Delivery> deliveries);
 }
 ===== ./java/hackathon/EcoRoute/application/service/RouteOptimizationService.java =====
 package hackathon.EcoRoute.application.service;
@@ -32,6 +33,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -39,12 +41,23 @@ import java.util.UUID;
 public class RouteOptimizationService implements OptimizeRouteUseCase {
 
     private final TollRepositoryPort tollRepositoryPort;
-    private static final double FUEL_PRICE_PER_KM = 500.0; // Valor base en COP
+    private static final Map<String, Double> FUEL_PRICE_PER_KM_BY_CATEGORY = Map.of(
+            "1", 900.0,   // Automóviles, motos, camionetas (hasta 3.500 kg)
+            "2", 1400.0,  // Buses, camiones pequeños (hasta 8.500 kg)
+            "3", 1900.0,  // Camiones medianos (hasta 12.500 kg)
+            "4", 2400.0,  // Camiones grandes y tractocamiones (más de 12.500 kg)
+            "5", 2400.0,
+            "6", 2400.0,
+            "7", 2400.0,
+            "8", 2400.0,
+            "9", 2400.0
+    );
 
     @Override
     public Route execute(List<Delivery> deliveries) {
         if (deliveries == null || deliveries.isEmpty()) return new Route();
 
+        double originalDistance = calculateTotalDistance(deliveries);
         // 1. Algoritmo Greedy para ordenar paradas por cercanía (Tu lógica actual)
         List<Delivery> optimizedList = new ArrayList<>();
         List<Delivery> remaining = new ArrayList<>(deliveries);
@@ -60,21 +73,30 @@ public class RouteOptimizationService implements OptimizeRouteUseCase {
 
         // 2. Cálculo de Distancia Real (Aquí podrías sumar distancias de OSRM luego)
         double totalDistance = calculateTotalDistance(optimizedList);
-        double fuelCost = totalDistance * FUEL_PRICE_PER_KM;
+        String vehicleCategory = getTollCategory(optimizedList.get(0).getWeightKg());
+        double fuelPricePerKm = FUEL_PRICE_PER_KM_BY_CATEGORY.getOrDefault(vehicleCategory, 900.0);
+        double fuelCost = totalDistance * fuelPricePerKm;
 
         // 3. ¡EL MOMENTO DE LA VERDAD!: Cálculo de peajes con datos de ArcGIS y OSRM
         // Pasamos la lista OPTIMIZADA para que el adaptador analice el trayecto real
-        double tollCost = tollRepositoryPort.calculateTollsForRoute(optimizedList);
+        RouteCost cost = tollRepositoryPort.calculateTollsForRoute(optimizedList);
 
         // 4. Construcción del objeto de costo
-        RouteCost cost = new RouteCost(fuelCost, tollCost, 0);
+        cost.setFuelCost(fuelCost);
         cost.calculateTotal();
 
         Route route = new Route();
+        double savingsPercent = originalDistance > 0
+                ? Math.round(((originalDistance - totalDistance) / originalDistance) * 100.0)
+                : 0;
+
         route.setId(UUID.randomUUID().toString());
-        route.setDeliveries(optimizedList); // Guardamos la lista ya ordenada
+        route.setDeliveries(optimizedList);
         route.setCost(cost);
         route.setTotalDistanceKm(totalDistance);
+        route.setRouteGeometry(cost.getRouteGeometry());
+        route.setSavingsPercent(savingsPercent);
+        route.setOriginalDistanceKm(originalDistance);
 
         return route;
     }
@@ -107,6 +129,24 @@ public class RouteOptimizationService implements OptimizeRouteUseCase {
                         Math.sin(dLon / 2) * Math.sin(dLon / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    private String getTollCategory(double weightKg) {
+        System.out.println("Determinando categoría de peaje para peso: " + weightKg + " kg");
+
+        String category;
+        if (weightKg <= 3500) category = "1";          // Automóviles, motos, camionetas
+        else if (weightKg <= 8500) category = "2";      // Buses, camiones pequeños
+        else if (weightKg <= 12500) category = "3";     // Camiones medianos
+        else if (weightKg <= 20500) category = "4";     // Camiones grandes
+        else if (weightKg <= 26500) category = "5";     // Tractocamiones 2 ejes
+        else if (weightKg <= 32500) category = "6";     // Tractocamiones 3 ejes
+        else if (weightKg <= 38500) category = "7";     // Tractocamiones 4 ejes
+        else if (weightKg <= 44500) category = "8";     // Tractocamiones 5 ejes
+        else category = "9";                            // Tractocamiones 6+ ejes
+
+        System.out.println("Categoría asignada: " + category);
+        return category;
     }
 }
 ===== ./java/hackathon/EcoRoute/controller/HealthController.java =====
@@ -150,6 +190,24 @@ public class Delivery {
     private String customerName;
     private double weightKg;
 }
+===== ./java/hackathon/EcoRoute/domain/model/DetectedToll.java =====
+package hackathon.EcoRoute.domain.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+public class DetectedToll {
+    private String name;
+    private double latitude;
+    private double longitude;
+    private double cost;
+}
 ===== ./java/hackathon/EcoRoute/domain/model/Route.java =====
 package hackathon.EcoRoute.domain.model;
 
@@ -169,6 +227,9 @@ public class Route {
     private List<Delivery> deliveries;
     private RouteCost cost;
     private double totalDistanceKm;
+    private String routeGeometry;
+    private double savingsPercent;
+    private double originalDistanceKm;
 }
 ===== ./java/hackathon/EcoRoute/domain/model/RouteCost.java =====
 package hackathon.EcoRoute.domain.model;
@@ -178,6 +239,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -186,6 +250,14 @@ public class RouteCost {
     private double fuelCost;
     private double tollCost;
     private double total;
+    private List<DetectedToll> detectedTolls = new ArrayList<>();
+    private String routeGeometry; // GeoJSON para el mapa
+
+    public RouteCost(double fuelCost, double tollCost, double ignored) {
+        this.fuelCost = fuelCost;
+        this.tollCost = tollCost;
+        this.detectedTolls = new ArrayList<>();
+    }
 
     public void calculateTotal() {
         this.total = this.fuelCost + this.tollCost;
@@ -241,12 +313,15 @@ package hackathon.EcoRoute.infrastructure.adapters.persistence;
 
 import hackathon.EcoRoute.application.ports.out.TollRepositoryPort;
 import hackathon.EcoRoute.domain.model.Delivery;
+import hackathon.EcoRoute.domain.model.DetectedToll;
+import hackathon.EcoRoute.domain.model.RouteCost;
 import hackathon.EcoRoute.infrastructure.adapters.util.TollScraper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -256,86 +331,183 @@ import java.util.Map;
 public class TollPersistenceAdapter implements TollRepositoryPort {
 
     private final TollScraper tollScraper;
-    private final WebClient webClient = WebClient.builder().build();
+
+    private final WebClient webClient = WebClient.builder()
+            .defaultHeader("User-Agent", "EcoRoute/1.0")
+            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+            .build();
 
     @Override
-    public double calculateTollsForRoute(List<Delivery> deliveries) {
-        if (deliveries == null || deliveries.size() < 2) return 0.0;
+    public RouteCost calculateTollsForRoute(List<Delivery> deliveries) {
+        System.out.println("=== INICIO calculateTollsForRoute ===");
+        System.out.println("Número de entregas: " + (deliveries != null ? deliveries.size() : "null"));
 
-        // 1. Obtenemos peajes (Solo una vez)
-        List<Map<String, Object>> liveTolls = tollScraper.getLiveTolls();
+        if (deliveries == null || deliveries.size() < 2) return new RouteCost(0, 0, 0);
 
-        // 2. Construimos el String de coordenadas: lon,lat;lon,lat;lon,lat...
+        // Calcular bounding box de las entregas
+        System.out.println("=== CALCULANDO BOUNDING BOX ===");
+        double minLat = Double.MAX_VALUE;
+        double maxLat = -Double.MAX_VALUE;
+        double minLon = Double.MAX_VALUE;
+        double maxLon = -Double.MAX_VALUE;
+
+        for (Delivery d : deliveries) {
+            minLat = Math.min(minLat, d.getLatitude());
+            maxLat = Math.max(maxLat, d.getLatitude());
+            minLon = Math.min(minLon, d.getLongitude());
+            maxLon = Math.max(maxLon, d.getLongitude());
+        }
+
+        System.out.println("Bounding box calculado: minLat=" + minLat + " maxLat=" + maxLat + " minLon=" + minLon + " maxLon=" + maxLon);
+
+        // Obtener peajes solo para el bounding box
+        System.out.println("=== OBTENIENDO PEAJES DE ARCGIS ===");
+        List<Map<String, Object>> liveTolls = tollScraper.getLiveTollsForBoundingBox(minLat, minLon, maxLat, maxLon);
+        System.out.println("Peajes obtenidos de ArcGIS: " + liveTolls.size());
+
+        // Construir String de coordenadas: lon,lat;lon,lat;lon,lat...
+        System.out.println("=== CONSTRUYENDO STRING DE COORDENADAS ===");
         StringBuilder pointsBuilder = new StringBuilder();
         for (Delivery d : deliveries) {
             if (pointsBuilder.length() > 0) pointsBuilder.append(";");
             pointsBuilder.append(String.format(Locale.US, "%f,%f", d.getLongitude(), d.getLatitude()));
         }
+        System.out.println("Entregas procesadas: " + deliveries.size());
 
-        // 3. UNA SOLA llamada a OSRM para toda la ruta
+        // UNA SOLA llamada a OSRM para toda la ruta
+        System.out.println("=== LLAMANDO A OSRM ===");
         String osrmUrl = "https://router.project-osrm.org/route/v1/driving/"
                 + pointsBuilder.toString()
                 + "?overview=full&geometries=geojson";
+        System.out.println("Llamando a OSRM con " + deliveries.size() + " entregas");
 
         try {
+            System.out.println("=== PROCESANDO RESPUESTA OSRM ===");
             Map<String, Object> response = webClient.get()
                     .uri(osrmUrl)
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
-                    .block(); // Gracias a Loom (Virtual Threads), esto no bloquea el hilo real, pero solo esperamos 1 vez.
+                    .timeout(Duration.ofSeconds(60))
+                    .block();
+
+            System.out.println("Respuesta OSRM recibida: " + (response != null ? "NO NULL" : "NULL"));
 
             if (response != null && response.containsKey("routes")) {
+                System.out.println("Respuesta OSRM contiene 'routes', procesando...");
                 return processTollMatching(response, liveTolls, deliveries);
+            } else {
+                System.out.println("Respuesta OSRM no contiene 'routes'");
             }
         } catch (Exception e) {
             System.err.println("Error en Batch OSRM: " + e.getMessage());
+            e.printStackTrace();
         }
 
-        return 0.0;
+        System.out.println("Retornando 0.0 - error o sin rutas");
+        System.out.println("=== FIN calculateTollsForRoute ===");
+        return new RouteCost(0, 0, 0);
     }
 
-
-    private double processTollMatching(Map<String, Object> osrmResponse, List<Map<String, Object>> features, List<Delivery> deliveries) {
+    private RouteCost processTollMatching(Map<String, Object> osrmResponse, List<Map<String, Object>> features, List<Delivery> deliveries) {
         double totalCost = 0.0;
+        int peajesProcesados = 0;
+        int peajesCoincidentes = 0;
+        List<DetectedToll> detectedTolls = new ArrayList<>();
+
         try {
             List<Map<String, Object>> routes = (List<Map<String, Object>>) osrmResponse.get("routes");
             Map<String, Object> geometry = (Map<String, Object>) routes.get(0).get("geometry");
             List<List<Double>> coordinates = (List<List<Double>>) geometry.get("coordinates");
 
+            System.out.println("Coordenadas de ruta OSRM: " + coordinates.size());
+            System.out.println("=== PROCESANDO PEAJES ===");
+
             for (Map<String, Object> feature : features) {
+                peajesProcesados++;
                 Map<String, Object> attr = (Map<String, Object>) feature.get("attributes");
                 Map<String, Object> geom = (Map<String, Object>) feature.get("geometry");
 
                 double tollLon = Double.parseDouble(geom.get("x").toString());
                 double tollLat = Double.parseDouble(geom.get("y").toString());
 
-                // Optimización: Solo calculamos Haversine si el punto está en el "Bounding Box" aproximado
-                for (List<Double> coord : coordinates) {
+                if (peajesProcesados % 10 == 0 || peajesProcesados == features.size()) {
+                    System.out.println("Procesando peaje " + peajesProcesados + "/" + features.size());
+                }
+
+                // Pre-filtro: reducir puntos OSRM al área cercana al peaje (±0.05 grados ~ 5km)
+                List<List<Double>> nearbyCoords = coordinates.stream()
+                        .filter(coord -> Math.abs(coord.get(1) - tollLat) < 0.05 && Math.abs(coord.get(0) - tollLon) < 0.05)
+                        .collect(java.util.stream.Collectors.toList());
+
+                // OPTIMIZACIÓN: Pre-filtro con distancia euclidiana antes de Haversine
+                if (nearbyCoords.isEmpty()) continue;
+
+                List<List<Double>> candidateCoords = nearbyCoords.stream()
+                        .filter(coord -> {
+                            double latDiffKm = Math.abs(coord.get(1) - tollLat) * 111;
+                            double lonDiffKm = Math.abs(coord.get(0) - tollLon) * 111 * Math.cos(Math.toRadians(tollLat));
+                            return (latDiffKm * latDiffKm + lonDiffKm * lonDiffKm) < 1.0;
+                        })
+                        .collect(java.util.stream.Collectors.toList());
+
+                if (candidateCoords.isEmpty()) continue;
+
+                for (List<Double> coord : candidateCoords) {
                     double pLon = coord.get(0);
                     double pLat = coord.get(1);
 
-                    // Quick check: ¿Está a menos de ~0.01 grados (~1km)? (Evita CPU costosa)
-                    if (Math.abs(pLat - tollLat) < 0.01 && Math.abs(pLon - tollLon) < 0.01) {
-                        if (haversine(pLat, pLon, tollLat, tollLon) < 0.5) { // 500 metros real
-                            // Determinar categoría de peaje según peso del vehículo
-                            String tollCategory = getTollCategory(deliveries.get(0).getWeightKg());
-                            String priceField = "F_cat_" + tollCategory + "_";
-                            
-                            Object priceObj = attr.get(priceField);
-                            if (priceObj == null) priceObj = attr.get("F_cat_1_"); // fallback
-                            totalCost += (priceObj != null) ? Double.parseDouble(priceObj.toString()) : 0.0;
-                            break; // Pasamos al siguiente peaje
+                    if (haversine(pLat, pLon, tollLat, tollLon) < 0.5) {
+                        String tollCategory = getTollCategory(deliveries.get(0).getWeightKg());
+                        String priceField = "F_cat_" + tollCategory + "_";
+
+                        Object priceObj = attr.get(priceField);
+                        if (priceObj == null) priceObj = attr.get("F_cat_1_");
+
+                        boolean yaDetectado = detectedTolls.stream()
+                                .anyMatch(t -> Math.abs(t.getLatitude() - tollLat) < 0.001 &&
+                                        Math.abs(t.getLongitude() - tollLon) < 0.001);
+
+                        if (!yaDetectado) {
+                            DetectedToll detected = new DetectedToll(
+                                    attr.get("F_ubicacion_") != null ? attr.get("F_ubicacion_").toString() : "Peaje",
+                                    tollLat,
+                                    tollLon,
+                                    priceObj != null ? Double.parseDouble(priceObj.toString()) : 0.0
+                            );
+                            detectedTolls.add(detected);
+                            totalCost += detected.getCost();
+                            peajesCoincidentes++;
                         }
+                        break;
                     }
                 }
             }
+
+            System.out.println("Resultado: " + peajesCoincidentes + "/" + peajesProcesados + " peajes - Costo: $" + String.format(Locale.US, "%.2f", totalCost));
+
         } catch (Exception e) {
             System.err.println("Error en matching: " + e.getMessage());
+            e.printStackTrace();
         }
-        return totalCost;
+
+        // Extraer geometría GeoJSON para el mapa
+        String geometry = "";
+        try {
+            List<Map<String, Object>> routes = (List<Map<String, Object>>) osrmResponse.get("routes");
+            Map<String, Object> routeGeom = (Map<String, Object>) routes.get(0).get("geometry");
+            geometry = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writeValueAsString(routeGeom);
+        } catch (Exception e) {
+            System.err.println("Error extrayendo geometría: " + e.getMessage());
+        }
+
+        RouteCost result = new RouteCost(0, totalCost, 0);
+        result.setDetectedTolls(detectedTolls);
+        result.setRouteGeometry(geometry);
+        return result;
     }
 
-    // Cálculo matemático real (Fórmula de Haversine) - Cero inventos
+    // Cálculo matemático real (Fórmula de Haversine)
     private double haversine(double lat1, double lon1, double lat2, double lon2) {
         double R = 6371; // Radio de la Tierra en KM
         double dLat = Math.toRadians(lat2 - lat1);
@@ -344,42 +516,25 @@ public class TollPersistenceAdapter implements TollRepositoryPort {
                 Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
                         Math.sin(dLon / 2) * Math.sin(dLon / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-    private double extractLongitude(Map<String, Object> feature) {
-        // 1. Intentamos buscar el campo LONGITUDE en los atributos
-        Map<String, Object> attributes = (Map<String, Object>) feature.get("attributes");
-        if (attributes != null && attributes.get("LONGITUDE") != null) {
-            return Double.parseDouble(attributes.get("LONGITUDE").toString());
-        }
-
-        // 2. Si no está en atributos, ArcGIS SIEMPRE lo envía en el objeto 'geometry'
-        Map<String, Object> geometry = (Map<String, Object>) feature.get("geometry");
-        if (geometry != null && geometry.get("x") != null) {
-            // En ArcGIS, 'x' es Longitud y 'y' es Latitud
-            return Double.parseDouble(geometry.get("x").toString());
-        }
-
-        // 3. Si llegamos aquí y no hay datos, lanzamos una excepción o log
-        // ¡NADA DE NÚMEROS QUEMADOS!
-        throw new RuntimeException("No se pudo obtener la longitud real del peaje en ArcGIS");
+        double distance = R * c;
+        return distance;
     }
 
     // Determinar categoría de peaje según peso del vehículo
     private String getTollCategory(double weightKg) {
-        if (weightKg <= 3500) return "1";          // Automóviles, motos, camionetas
-        else if (weightKg <= 8500) return "2";      // Buses, camiones pequeños
-        else if (weightKg <= 12500) return "3";     // Camiones medianos
-        else if (weightKg <= 20500) return "4";     // Camiones grandes
-        else if (weightKg <= 26500) return "5";     // Tractocamiones 2 ejes
-        else if (weightKg <= 32500) return "6";     // Tractocamiones 3 ejes
-        else if (weightKg <= 38500) return "7";     // Tractocamiones 4 ejes
-        else if (weightKg <= 44500) return "8";     // Tractocamiones 5 ejes
-        else return "9";                            // Tractocamiones 6+ ejes
+        String category;
+        if (weightKg <= 3500) category = "1";
+        else if (weightKg <= 8500) category = "2";
+        else if (weightKg <= 12500) category = "3";
+        else if (weightKg <= 20500) category = "4";
+        else if (weightKg <= 26500) category = "5";
+        else if (weightKg <= 32500) category = "6";
+        else if (weightKg <= 38500) category = "7";
+        else if (weightKg <= 44500) category = "8";
+        else category = "9";
+        return category;
     }
-}
-===== ./java/hackathon/EcoRoute/infrastructure/adapters/util/CsvParser.java =====
+}===== ./java/hackathon/EcoRoute/infrastructure/adapters/util/CsvParser.java =====
 package hackathon.EcoRoute.infrastructure.adapters.util;
 
 import hackathon.EcoRoute.domain.model.Delivery;
@@ -457,9 +612,11 @@ package hackathon.EcoRoute.infrastructure.adapters.util;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import org.springframework.core.ParameterizedTypeReference;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -473,29 +630,51 @@ public class TollScraper {
         this.webClient = WebClient.builder().build();
     }
 
-    // URL completa de ArcGIS con todos los campos relevantes para peajes
-    private static final String ARCGIS_URL = "https://services7.arcgis.com/8o2hyYSY6GDe4YX6/arcgis/rest/services/PeajesColombia/FeatureServer/0/query?where=1%3D1&outFields=Cruce_Base_INVIAS,F_a_cargo_de_,F_administra_,F_cat_1_,F_cat_2_,F_cat_3_,F_cat_4_,F_cat_5_,F_cat_6_,F_cat_7_,F_cat_8_,F_cat_9_,F_cat_EAE_,F_cat_EC_,F_cat_E_,F_cat_IEEE_,F_cat_IEE_,F_cat_IE_,F_cat_IE_10_,F_cat_IIA_,F_cat_IIE_,F_cat_IIIE_,F_cat_IVE_,F_cat_VE_,F_cat_VIE_,F_cat_VIIE_,F_codigo_via_,F_sector_,F_sentido_,telefono_peaje_,telefono_grua_,F_territoria_,F_ubicacion_,LATITUDE,LONGITUDE&returnGeometry=true&f=json";
+    private static final String ARCGIS_BASE_URL = "https://services7.arcgis.com/8o2hyYSY6GDe4YX6/arcgis/rest/services/PeajesColombia/FeatureServer/0/query";
 
-    public List<Map<String, Object>> getLiveTolls() {
+    public List<Map<String, Object>> getLiveTollsForBoundingBox(double minLat, double minLon, double maxLat, double maxLon) {
+        System.out.println("=== INICIO getLiveTollsForBoundingBox ===");
+
+        String dynamicUrl = null;
         try {
-            Mono<Map<String, Object>> responseMono = webClient.get()
-                    .uri(ARCGIS_URL)
-                    .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {});
+            // Usamos .fromHttpUrl directamente (es un método estático)
+            dynamicUrl = UriComponentsBuilder.fromUriString(ARCGIS_BASE_URL)
+                    .queryParam("where", "1=1")
+                    .queryParam("outFields", "F_cat_1_,F_cat_2_,F_cat_3_,F_cat_4_,F_cat_5_,F_cat_6_,F_cat_7_,F_cat_8_,F_cat_9_,F_ubicacion_,LATITUDE,LONGITUDE")
+                    // Importante: ArcGIS espera Lon,Lat,Lon,Lat (x,y,x,y)
+                    .queryParam("geometry", minLon + "," + minLat + "," + maxLon + "," + maxLat)
+                    .queryParam("geometryType", "esriGeometryEnvelope")
+                    .queryParam("inSR", "4326")
+                    .queryParam("spatialRel", "esriSpatialRelIntersects")
+                    .queryParam("returnGeometry", "true")
+                    .queryParam("f", "json")
+                    .build()
+                    .toUriString();
 
-            Map<String, Object> response = responseMono.block();
+            System.out.println("URL Generada: " + dynamicUrl);
+
+            Map<String, Object> response = webClient.get()
+                    .uri(dynamicUrl)
+                    .retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                    .timeout(Duration.ofSeconds(60))
+                    .block();
 
             if (response != null && response.containsKey("features")) {
-                // Devolvemos la lista de 'features' completa (contiene attributes Y geometry)
-                return (List<Map<String, Object>>) response.get("features");
+                List<Map<String, Object>> features = (List<Map<String, Object>>) response.get("features");
+                System.out.println("Peajes obtenidos: " + features.size());
+                return features;
+            } else {
+                System.out.println("Response no contiene 'features'. Error: " + (response != null ? response.get("error") : "null"));
             }
         } catch (Exception e) {
             System.err.println("Error consumiendo ArcGIS: " + e.getMessage());
+            e.printStackTrace();
         }
+
         return new ArrayList<>();
     }
-}
-===== ./java/hackathon/EcoRoute/infrastructure/adapters/web/RouteController.java =====
+}===== ./java/hackathon/EcoRoute/infrastructure/adapters/web/RouteController.java =====
 package hackathon.EcoRoute.infrastructure.adapters.web;
 
 import hackathon.EcoRoute.application.ports.in.OptimizeRouteUseCase;
@@ -570,7 +749,14 @@ spring.threads.virtual.enabled=true===== ./resources/data.sql =====
 -- Peajes reales en rutas desde Pasto (Valores aproximados Categoría 1)
 INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Placer (Pasto-Ipiales)', 13200.0, 0.8256, -77.6111);
 INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje Daza (Pasto-Buesaco)', 11800.0, 1.3055, -77.2555);
-INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (Pasto-Mocoa)', 10500.0, 1.1666, -77.1500);===== ./resources/templates/fragments/error.html =====
+INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (Pasto-Mocoa)', 10500.0, 1.1666, -77.1500);===== ./resources/static/example.csv =====
+CustomerName,Address,Latitude,Longitude,WeightKg
+Bodega Central,Calle 13 No 23-40 Bogota,4.6097,-74.0817,1500
+Cliente Soacha,Carrera 7 No 10-15 Soacha,4.5793,-74.2172,800
+Cliente Silvania,Via Principal Silvania Cundinamarca,4.4023,-74.3886,1200
+Cliente Fusagasuga,Carrera 6 No 8-20 Fusagasuga,4.3372,-74.3647,950
+Cliente Melgar,Calle 5 No 3-10 Melgar Tolima,4.2019,-74.6458,600
+Cliente Girardot,Avenida Circunvalar Girardot,4.3042,-74.8016,1100===== ./resources/templates/fragments/error.html =====
 <div th:fragment="error-message" class="animate-bounce bg-red-500/20 border border-red-500/50 p-4 rounded-2xl text-red-200 flex items-center gap-3">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -578,6 +764,28 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
     <span th:text="${error}">An error occurred while processing the file.</span>
 </div>===== ./resources/templates/fragments/results.html =====
 <div th:fragment="route-results" class="space-y-6 animate-fade-in">
+    <div th:if="${route.savingsPercent > 0}"
+         class="bg-emerald-500/20 border border-emerald-500/40 rounded-2xl p-4 flex items-center gap-4">
+        <div class="text-4xl">🌱</div>
+        <div>
+            <p class="text-emerald-400 font-black text-xl">
+                ¡Ahorraste <span th:text="${route.savingsPercent} + '%'"></span> en distancia!
+            </p>
+            <p class="text-slate-400 text-sm">
+                Ruta sin optimizar: <span class="text-slate-300" th:text="${#numbers.formatDecimal(route.originalDistanceKm, 1, 1)} + ' km'"></span>
+                → Ruta optimizada: <span class="text-emerald-400 font-bold" th:text="${#numbers.formatDecimal(route.totalDistanceKm, 1, 1)} + ' km'"></span>
+            </p>
+        </div>
+    </div>
+
+    <div th:if="${route.savingsPercent <= 0}"
+         class="bg-blue-500/20 border border-blue-500/40 rounded-2xl p-4 flex items-center gap-4">
+        <div class="text-4xl">✅</div>
+        <div>
+            <p class="text-blue-400 font-black text-xl">¡Tu ruta ya estaba optimizada!</p>
+            <p class="text-slate-400 text-sm">El orden del CSV era el más eficiente posible.</p>
+        </div>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="glass rounded-2xl p-6 border-l-4 border-emerald-500 shadow-2xl">
             <p class="text-slate-400 text-xs uppercase tracking-widest font-bold">Total Est. Cost</p>
@@ -599,7 +807,7 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
                 <span class="bg-emerald-500/20 p-2 rounded-lg mr-3">
                     <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A2 2 0 013 15.487V5.412a2 2 0 011.187-1.808l5.447-2.724a2 2 0 011.732 0l5.447 2.724A2 2 0 0118 5.412v10.075a2 2 0 01-1.187 1.808l-5.447 2.724a2 2 0 01-1.732 0z"></path></svg>
                 </span>
-                Live Route Trace <span class="ml-2 text-xs font-normal text-slate-400" th:text="'(' + ${route.totalDistanceKm} + ' km)'"></span>
+                Live Route Trace <span class="ml-2 text-xs font-normal text-slate-400" th:text="'(' + ${#numbers.formatDecimal(route.totalDistanceKm, 1, 1)} + ' km)'"></span>
             </h2>
         </div>
         <div id="map" class="h-96 w-full rounded-2xl border border-white/5 shadow-inner overflow-hidden"></div>
@@ -633,20 +841,44 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
                  .bindPopup(`<b>${d.customerName}</b><br>${d.address}`);
             });
 
-            // Trazar la ruta real OSRM (Misma lógica que el Backend)
-            fetch(`https://router.project-osrm.org/route/v1/driving/${osrmPoints}?overview=full&geometries=geojson`)
-                .then(r => r.json())
-                .then(data => {
-                    var route = L.geoJSON(data.routes[0].geometry, {
+            // Marcadores de peajes detectados
+            var detectedTolls = /*[[${route.cost.detectedTolls}]]*/ [];
+            detectedTolls.forEach(function(toll) {
+                var tollIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style='background:#f59e0b;color:#1e293b;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;border:2px solid rgba(255,255,255,0.3)'>$</div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+                L.marker([toll.latitude, toll.longitude], {icon: tollIcon})
+                 .addTo(map)
+                 .bindPopup(`<b>💰 ${toll.name}</b><br>Costo: $${toll.cost.toLocaleString('es-CO')} COP`);
+            });
+            // Geometría ya calculada por el backend - sin segunda llamada a OSRM
+            var routeGeometry = /*[[${route.routeGeometry}]]*/ null;
+            if (routeGeometry) {
+                try {
+                    var geomObj = typeof routeGeometry === 'string' ? JSON.parse(routeGeometry) : routeGeometry;
+                    var routeLayer = L.geoJSON(geomObj, {
                         style: { color: '#10b981', weight: 6, opacity: 0.6, lineJoin: 'round' }
                     }).addTo(map);
-                    map.fitBounds(route.getBounds(), {padding: [50, 50]});
-                });
+                    map.fitBounds(routeLayer.getBounds(), {padding: [50, 50]});
+                } catch(e) {
+                    console.error('Error dibujando ruta:', e);
+                }
+            }
         })();
     </script>
 
     <div class="glass rounded-3xl p-6 border border-white/5 shadow-xl">
-        <h2 class="text-xl font-bold text-white mb-6">Optimized Delivery Sequence</h2>
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-bold text-white">Optimized Delivery Sequence</h2>
+            <button onclick="sendWhatsApp()"
+                    class="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-5 rounded-full transition-all transform hover:scale-105">
+                <svg viewBox="0 0 24 24" class="w-5 h-5 fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                Enviar a conductor
+            </button>
+        </div>
         <div class="grid grid-cols-1 gap-3">
             <div th:each="delivery, iter : ${route.deliveries}"
                  class="group flex items-center p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all cursor-default">
@@ -662,6 +894,36 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
             </div>
         </div>
     </div>
+    <script th:inline="javascript">
+        function sendWhatsApp() {
+            var deliveries = /*[[${route.deliveries}]]*/ [];
+            var tolls = /*[[${route.cost.detectedTolls}]]*/ [];
+            var totalCost = /*[[${route.cost.total}]]*/ 0;
+            var distance = /*[[${route.totalDistanceKm}]]*/ 0;
+
+            var msg = "🚛 *RUTA OPTIMIZADA - EcoRoute*\n\n";
+            msg += "📦 *Secuencia de entregas:*\n";
+            deliveries.forEach(function(d, i) {
+                msg += (i+1) + ". " + d.customerName + " - " + d.address + "\n";
+                msg += "   📍 https://maps.google.com/?q=" + d.latitude + "," + d.longitude + "\n";
+            });
+
+            msg += "\n💰 *Peajes en ruta:*\n";
+            if (tolls.length === 0) {
+                msg += "Sin peajes detectados\n";
+            } else {
+                tolls.forEach(function(t) {
+                    msg += "⚠️ " + t.name + ": $" + t.cost.toLocaleString('es-CO') + " COP\n";
+                });
+            }
+
+            msg += "\n📊 *Resumen:*\n";
+            msg += "📏 Distancia: " + Math.round(distance * 10) / 10 + " km\n";
+            msg += "💵 Costo total estimado: $" + Math.round(totalCost).toLocaleString('es-CO') + " COP";
+
+            window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
+        }
+    </script>
 </div>===== ./resources/templates/index.html =====
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -708,7 +970,11 @@ INSERT INTO tolls (name, price, latitude, longitude) VALUES ('Peaje El Encano (P
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
                 <span id="file-name" class="text-slate-400 font-medium">Click to select or drag your CSV file</span>
-                <span class="text-xs text-slate-500 mt-2">Format: Name, Address, Lat, Lon, Weight</span>
+                <span class="text-xs text-slate-500 mt-2">Format: CustomerName, Address, Latitude, Longitude, WeightKg</span>
+                <span class="text-xs text-amber-400/70 mt-1">⚠️ La primera fila debe ser tu bodega o punto de origen</span>
+                <a href="/example.csv" download class="mt-2 text-xs text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors">
+                    ⬇ Download example CSV (Bogotá → Girardot)
+                </a>
             </label>
 
             <button type="submit"

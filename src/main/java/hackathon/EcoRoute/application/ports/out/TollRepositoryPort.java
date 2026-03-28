@@ -5,6 +5,7 @@ import hackathon.EcoRoute.domain.model.RouteCost;
 
 import java.util.List;
 
+
 public interface TollRepositoryPort {
-    RouteCost calculateTollsForRoute(List<Delivery> deliveries);
+    RouteCost calculateTollsForRoute(List<Delivery> deliveries, List<List<Double>> routeCoordinates, String geometryGeoJson);
 }
