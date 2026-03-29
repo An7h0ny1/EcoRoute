@@ -12,6 +12,8 @@ public interface RoutingPort {
             List<Delivery> optimizedDeliveries,
             String geometryGeoJson,
             List<List<Double>> coordinates,
-            double totalDistanceKm
+            double totalDistanceKm,
+            String originalGeometryGeoJson,
+            double realOriginalDistanceKm
     ) {}
 }

@@ -14,7 +14,7 @@ import java.util.List;
 public class TollMatcher {
     private final DistanceCalculator distanceCalculator;
 
-    // Radio de Alta Precisión: 150 metros.
+    // Radio de 150 metros.
     private static final double DETECTION_RADIUS_KM = 0.15;
     private static final double FAST_BOUNDING_BOX_DEG = 0.015;
 
@@ -52,7 +52,7 @@ public class TollMatcher {
                         return false;
                     }
 
-                    // Cálculo Haversine de precisión
+                    // Cálculo Haversine
                     double distance = distanceCalculator.calculateHaversine(
                             pointLat, pointLon, toll.getLatitude(), toll.getLongitude());
 

@@ -22,8 +22,6 @@ public class CsvParser {
                 // Necesitamos al menos: nombre, dirección, lat, lon (4 cols mínimo)
                 if (v.length < 4) continue;
 
-                // Leemos desde el FINAL para ser resilientes a comas en la dirección
-                // Última col: peso (opcional), penúltima: longitud, antepenúltima: latitud
                 try {
                     double weightKg = 1000.0;
                     int latIndex, lonIndex;
@@ -33,8 +31,6 @@ public class CsvParser {
                     double secondLastVal = Double.parseDouble(v[v.length - 2].trim());
                     double thirdLastVal = Double.parseDouble(v[v.length - 3].trim());
 
-                    // Las coordenadas de Colombia: lat ~ 4, lon ~ -74
-                    // Si thirdLastVal y secondLastVal parecen coordenadas, lastVal es el peso
                     if (Math.abs(thirdLastVal) < 20 && Math.abs(secondLastVal) < 90) {
                         latIndex = v.length - 3;
                         lonIndex = v.length - 2;

@@ -23,24 +23,18 @@ public class RouteController {
 
     @GetMapping("/")
     public String index() {
-        return "index"; // Esto buscará index.html en la carpeta templates
+        return "index";
     }
 
     @PostMapping("/optimize")
     public String optimize(@RequestParam("file") MultipartFile file, Model model) {
         try {
-            // 1. Parseo real del CSV subido por el usuario
             List<Delivery> deliveries = csvParser.parse(file);
 
-            // 2. Ejecución de la lógica de optimización (Haversine + ArcGIS + OSRM)
-            // Aquí es donde se calcula el ahorro real y los peajes de la ANI
             Route optimizedRoute = optimizeRouteUseCase.execute(deliveries);
 
-            // 3. Pasamos el objeto enriquecido a la vista
             model.addAttribute("route", optimizedRoute);
 
-            // 4. HTMX: Devolvemos solo el fragmento de resultados
-            // Esto evita que la página parpadee y da una sensación de fluidez total
             return "fragments/results :: route-results";
 
         } catch (Exception e) {
@@ -53,8 +47,6 @@ public class RouteController {
     public String downloadTemplate(jakarta.servlet.http.HttpServletResponse response) {
         response.setHeader("Content-Disposition", "attachment; filename=plantilla_ecoroute.csv");
 
-        // Plantilla intencionalmente DESORDENADA para probar el algoritmo TSP (Ruta Bogotá - Tunja)
-        // El orden real óptimo de sur a norte debería ser: Bogotá -> Chía -> Cajicá -> Tocancipá -> Villapinzón -> Tunja
         return "Nombre,Dirección,Latitud,Longitud,PesoKg\n" +
                 "Bodega Norte,Calle 170 #67-51 Bogotá,4.7531,-74.0456,1500\n" +
                 "Cliente Tunja,Carrera 10 #20-50 Centro Tunja,5.5353,-73.3678,800\n" +

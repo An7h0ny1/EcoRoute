@@ -30,45 +30,36 @@ public class RouteOptimizationService implements OptimizeRouteUseCase {
         if (deliveries == null || deliveries.isEmpty()) return new Route();
         deliveries.forEach(locationValidator::validateDelivery);
 
-        // 1. Distancia sin optimizar (Ajustada con factor de tortuosidad colombiana 1.4)
-        double originalDistance = calculateOriginalHaversineDistance(deliveries);
+        List<Delivery> originalDeliveries = List.copyOf(deliveries);
 
-        // 2. MAGIA: OSRM Engine calcula la matriz TSP y el orden perfecto por carretera
         RoutingPort.RouteResult osrmResult = routingPort.optimizeAndGetRoute(deliveries);
         List<Delivery> optimizedList = osrmResult.optimizedDeliveries();
         double totalDistance = osrmResult.totalDistanceKm();
+        double originalDistance = osrmResult.realOriginalDistanceKm();
 
-        // 3. Métricas Financieras
         VehicleCategory category = VehicleCategory.fromWeight(optimizedList.get(0).getWeightKg());
         double fuelCost = totalDistance * category.getFuelPricePerKm();
 
-        // 4. Peajes (Pasamos la geometría para no recalcularla)
         RouteCost cost = tollRepositoryPort.calculateTollsForRoute(
                 optimizedList, osrmResult.coordinates(), osrmResult.geometryGeoJson()
         );
         cost.setFuelCost(fuelCost);
         cost.calculateTotal();
 
-        return buildRouteResponse(optimizedList, cost, totalDistance, originalDistance);
+        return buildRouteResponse(originalDeliveries, optimizedList, cost, totalDistance, originalDistance, osrmResult.originalGeometryGeoJson());
     }
 
-    private double calculateOriginalHaversineDistance(List<Delivery> list) {
-        double total = 0.0;
-        for (int i = 0; i < list.size() - 1; i++) {
-            total += distanceCalculator.calculateHaversine(list.get(i), list.get(i + 1));
-        }
-        return total * 1.4; // Ajuste asimilando montañas en lugar de línea recta pura
-    }
-
-    private Route buildRouteResponse(List<Delivery> deliveries, RouteCost cost, double totalDist, double originalDist) {
+    private Route buildRouteResponse(List<Delivery> originalDeliveries, List<Delivery> optimizedDeliveries, RouteCost cost, double totalDist, double originalDist, String originalGeometry) {
         double savings = originalDist > totalDist ? Math.round(((originalDist - totalDist) / originalDist) * 100.0) : 0;
 
         Route route = new Route();
         route.setId(UUID.randomUUID().toString());
-        route.setDeliveries(deliveries);
+        route.setDeliveries(optimizedDeliveries);
+        route.setOriginalDeliveries(originalDeliveries);
         route.setCost(cost);
         route.setTotalDistanceKm(totalDist);
         route.setRouteGeometry(cost.getRouteGeometry());
+        route.setOriginalRouteGeometry(originalGeometry); // NUEVO
         route.setSavingsPercent(savings);
         route.setOriginalDistanceKm(originalDist);
         return route;

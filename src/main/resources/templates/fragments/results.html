@@ -45,19 +45,23 @@
 
     <!-- MAPA INTERACTIVO -->
     <div class="glass rounded-[2.5rem] p-4 shadow-2xl border border-white/5 bg-slate-900/20">
-        <div class="flex justify-between items-center mb-4 px-4 pt-2">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 px-4 pt-2 gap-4">
             <div>
                 <h2 class="text-lg font-bold text-white flex items-center gap-2">
                     <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
                     Trazado Geoespacial de Entrega
                 </h2>
-                <p class="text-[10px] text-slate-500 uppercase tracking-widest ml-4">Cálculo en tiempo real vía Motor OSRM</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-widest ml-4 mt-1">Cálculo en tiempo real vía Motor OSRM</p>
             </div>
-            <div class="hidden md:flex gap-4">
-                <div class="text-right">
-                    <p class="text-[10px] text-slate-500 uppercase">Peajes Detectados</p>
-                    <p class="text-amber-500 font-bold" th:text="${route.cost.detectedTolls.size()}"></p>
-                </div>
+
+            <!-- Controles Interactivos para el Pitch -->
+            <div class="flex gap-2 bg-slate-800/50 p-1.5 rounded-xl border border-white/10">
+                <button id="btn-toggle-original" class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 bg-transparent text-slate-400 hover:bg-red-500/20 hover:text-red-400 border border-transparent">
+                    Ver Ruta Original
+                </button>
+                <button id="btn-toggle-optimized" class="px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 bg-emerald-500 text-slate-900 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                    Ver EcoRoute 🌱
+                </button>
             </div>
         </div>
         <div id="map" class="h-[550px] w-full rounded-[2rem] border border-white/5 shadow-inner z-10"></div>
@@ -131,19 +135,18 @@
         </div>
     </div>
 
-    <!-- SCRIPTS DE MAPA Y WHATSAPP (Mantenemos la lógica pero pulimos el mapa) -->
+    <!-- SCRIPTS DE MAPA Y WHATSAPP -->
     <script th:inline="javascript">
         (function() {
             var deliveries = /*[[${route.deliveries}]]*/[];
             if (!deliveries || deliveries.length === 0) return;
 
-            // 1. ENTERPRISE FIX: Limpiar instancia previa de Leaflet si existe
-            // Esto evita que HTMX rompa el mapa al cargar un nuevo CSV
+            // Limpiar instancia previa de Leaflet si existe
             if (window.ecoRouteMap !== undefined && window.ecoRouteMap !== null) {
                 window.ecoRouteMap.remove();
             }
 
-            // 2. Crear nueva instancia vinculada a Window
+            //Crear nueva instancia vinculada a Window
             window.ecoRouteMap = L.map('map', {zoomControl: false}).setView([deliveries[0].latitude, deliveries[0].longitude], 12);
 
             // Estilo Dark Matter de CartoDB
@@ -180,21 +183,79 @@
                 });
             }
 
-            // Geometría de la Ruta
+            // DIBUJAR LA RUTA ORIGINAL
+            var originalRouteGeometry = /*[[${route.originalRouteGeometry}]]*/ null;
+            var originalLayer = null;
+            if (originalRouteGeometry) {
+                try {
+                    var origGeomObj = typeof originalRouteGeometry === 'string' ? JSON.parse(originalRouteGeometry) : originalRouteGeometry;
+                    originalLayer = L.geoJSON(origGeomObj, {
+                        // Rojo, semitransparente y punteado para denotar ineficiencia
+                        style: { color: '#ef4444', weight: 5, opacity: 0.5, dashArray: '10, 10', lineCap: 'round', lineJoin: 'round' }
+                    }).addTo(window.ecoRouteMap);
+                } catch(e) {
+                    console.error("Error parseando geometría original GeoJSON", e);
+                }
+            }
+
+            // DIBUJAR LA RUTA OPTIMIZADA
             var routeGeometry = /*[[${route.routeGeometry}]]*/ null;
             if (routeGeometry) {
                 try {
                     var geomObj = typeof routeGeometry === 'string' ? JSON.parse(routeGeometry) : routeGeometry;
                     var routeLayer = L.geoJSON(geomObj, {
-                        style: { color: '#10b981', weight: 6, opacity: 0.6, lineCap: 'round', lineJoin: 'round' }
+                        // Verde esmeralda vibrante
+                        style: { color: '#10b981', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }
                     }).addTo(window.ecoRouteMap);
 
-                    // Auto-encuadre del mapa
-                    window.ecoRouteMap.fitBounds(routeLayer.getBounds(), {padding: [50, 50]});
+                    // Auto-encuadre del mapa para que abarque todo el recorrido
+                    var bounds = routeLayer.getBounds();
+                    if (originalLayer) {
+                        bounds.extend(originalLayer.getBounds());
+                    }
+                    window.ecoRouteMap.fitBounds(bounds, {padding:[50, 50]});
                 } catch(e) {
                     console.error("Error parseando geometría GeoJSON", e);
                 }
             }
+
+            // --- Lógica de Botones Interactivos ---
+            const btnOriginal = document.getElementById('btn-toggle-original');
+            const btnOptimized = document.getElementById('btn-toggle-optimized');
+
+            // Función para actualizar estilos de los botones
+            function updateButtonStyles(activeOriginal, activeOptimized) {
+                // Estilo Botón Original
+                if (activeOriginal) {
+                    btnOriginal.className = "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 bg-red-500/20 text-red-400 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]";
+                } else {
+                    btnOriginal.className = "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 bg-transparent text-slate-500 hover:bg-slate-700/50 border border-transparent";
+                }
+
+                // Estilo Botón Optimizado
+                if (activeOptimized) {
+                    btnOptimized.className = "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 bg-emerald-500 text-slate-900 shadow-[0_0_15px_rgba(16,185,129,0.4)] border border-emerald-400";
+                } else {
+                    btnOptimized.className = "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-300 bg-transparent text-slate-500 hover:bg-slate-700/50 border border-transparent";
+                }
+            }
+
+            // Evento: Mostrar Solo Original
+            btnOriginal.addEventListener('click', () => {
+                if (originalLayer && !window.ecoRouteMap.hasLayer(originalLayer)) window.ecoRouteMap.addLayer(originalLayer);
+                if (routeLayer && window.ecoRouteMap.hasLayer(routeLayer)) window.ecoRouteMap.removeLayer(routeLayer);
+                updateButtonStyles(true, false);
+            });
+
+            // Evento: Mostrar Solo Optimizado
+            btnOptimized.addEventListener('click', () => {
+                if (routeLayer && !window.ecoRouteMap.hasLayer(routeLayer)) window.ecoRouteMap.addLayer(routeLayer);
+                if (originalLayer && window.ecoRouteMap.hasLayer(originalLayer)) window.ecoRouteMap.removeLayer(originalLayer);
+                updateButtonStyles(false, true);
+            });
+
+            // Estado inicial: Dejamos solo la optimizada encendida para el "Efecto Revelación"
+            if (originalLayer) window.ecoRouteMap.removeLayer(originalLayer);
 
             // Fix para contenedores dinámicos: Forzar a Leaflet a recalcular su tamaño
             setTimeout(() => { window.ecoRouteMap.invalidateSize(); }, 300);
@@ -210,7 +271,7 @@
 
             // Construimos el mensaje usando un array para manejar saltos de línea limpiamente
             var lines = [
-                "*📦 HOJA DE RUTA - EcoRoute.co*",
+                "*HOJA DE RUTA - EcoRoute.co*",
                 "*Ahorro Logístico:* " + saved + "%",
                 "_____________________________",
                 ""
@@ -219,12 +280,12 @@
             lines.push("*ORDEN DE ENTREGA:*");
             d.forEach(function(item, i) {
                 lines.push((i + 1) + ". " + item.customerName);
-                lines.push("📍 Ubicación: https://www.google.com/maps?q=" + item.latitude + "," + item.longitude);
+                lines.push("Ubicación: https://www.google.com/maps?q=" + item.latitude + "," + item.longitude);
                 lines.push("");
             });
 
             if (t && t.length > 0) {
-                lines.push("*💳 PEAJES DETECTADOS:*");
+                lines.push("*PEAJES DETECTADOS:*");
                 t.forEach(function(toll) {
                     lines.push("- " + toll.name + " ($" + Math.round(toll.cost).toLocaleString('es-CO') + ")");
                 });
@@ -232,10 +293,10 @@
             }
 
             lines.push("*RESUMEN TÉCNICO:*");
-            lines.push("📏 Distancia: " + dist + " km");
-            lines.push("💵 Costo Est.: $" + totalMoney + " COP");
+            lines.push("Distancia: " + dist + " km");
+            lines.push("Costo Est.: $" + totalMoney + " COP");
             lines.push("");
-            lines.push("Optimizado con EcoRoute 🌱");
+            lines.push("Optimizado con EcoRoute");
 
             // Unimos todo con saltos de línea de URL (%0A)
             var finalMsg = lines.join("\n");

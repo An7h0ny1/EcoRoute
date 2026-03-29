@@ -7,10 +7,6 @@ import org.springframework.stereotype.Service;
 public class DistanceCalculator {
     private static final double EARTH_RADIUS_KM = 6371.0;
 
-    public double calculateHaversine(Delivery d1, Delivery d2) {
-        return calculateHaversine(d1.getLatitude(), d1.getLongitude(), d2.getLatitude(), d2.getLongitude());
-    }
-
     public double calculateHaversine(double lat1, double lon1, double lat2, double lon2) {
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);

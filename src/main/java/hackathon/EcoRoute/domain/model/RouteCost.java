@@ -17,7 +17,7 @@ public class RouteCost {
     private double tollCost;
     private double total;
     private List<DetectedToll> detectedTolls = new ArrayList<>();
-    private String routeGeometry; // GeoJSON para el mapa
+    private String routeGeometry;
 
     public RouteCost(double fuelCost, double tollCost, double ignored) {
         this.fuelCost = fuelCost;

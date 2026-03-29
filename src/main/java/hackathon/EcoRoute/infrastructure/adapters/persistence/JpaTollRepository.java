@@ -11,9 +11,6 @@ import java.util.Map;
 @Repository
 public interface JpaTollRepository extends JpaRepository<TollEntity, Integer> {
 
-    // LEFT JOIN garantiza que el peaje sale sí o sí.
-    // Eliminamos GROUP BY para que todos los peajes que cumplan las condiciones aparezcan.
-    // COALESCE para que si no hay tarifa, el precio sea 0.
     @Query(value = "SELECT p.id_peaje as id, p.nombre as name, p.lat as latitude, p.lon as longitude, " +
             "COALESCE(MAX(t.valor_2026), 0) as price " +
             "FROM peajes p " +

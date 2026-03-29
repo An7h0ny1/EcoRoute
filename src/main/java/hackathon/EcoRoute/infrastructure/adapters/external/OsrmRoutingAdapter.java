@@ -17,47 +17,57 @@ public class OsrmRoutingAdapter implements RoutingPort {
 
     @Override
     public RouteResult optimizeAndGetRoute(List<Delivery> deliveries) {
-        System.out.println("[OsrmRoutingAdapter] Solicitando matriz TSP al engine OSRM...");
 
         String waypointString = deliveries.stream()
                 .map(d -> String.format(java.util.Locale.US, "%f,%f", d.getLongitude(), d.getLatitude()))
                 .collect(Collectors.joining(";"));
 
-        // Usamos /trip para resolver el Agente Viajero. Source=first mantiene la bodega como origen.
-        String url = "https://router.project-osrm.org/trip/v1/driving/" + waypointString +
+        //URL para optimizar (TSP)
+        String tripUrl = "https://router.project-osrm.org/trip/v1/driving/" + waypointString +
                 "?roundtrip=false&source=first&overview=full&geometries=geojson";
 
-        try {
-            Map<String, Object> response = webClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
-                    .block();
+        // URL para la ruta original (tal cual viene en el CSV, por carretera)
+        String routeUrl = "https://router.project-osrm.org/route/v1/driving/" + waypointString +
+                "?overview=full&geometries=geojson";
 
-            return parseResponse(response, deliveries);
+        try {
+            Map<String, Object> tripResponse = webClient.get().uri(tripUrl).retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).block();
+
+            Map<String, Object> routeResponse = webClient.get().uri(routeUrl).retrieve()
+                    .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).block();
+
+            return parseResponse(tripResponse, routeResponse, deliveries);
         } catch (Exception e) {
             throw new RuntimeException("Error comunicando con OSRM Engine: " + e.getMessage());
         }
     }
 
     @SuppressWarnings("unchecked")
-    private RouteResult parseResponse(Map<String, Object> response, List<Delivery> originalDeliveries) throws Exception {
-        List<Map<String, Object>> trips = (List<Map<String, Object>>) response.get("trips");
-        List<Map<String, Object>> waypoints = (List<Map<String, Object>>) response.get("waypoints");
+    private RouteResult parseResponse(Map<String, Object> tripResponse, Map<String, Object> routeResponse, List<Delivery> originalDeliveries) throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
-        // 1. Extraer geometría real y distancia
+        //Extraer datos optimizados
+        List<Map<String, Object>> trips = (List<Map<String, Object>>) tripResponse.get("trips");
+        List<Map<String, Object>> waypoints = (List<Map<String, Object>>) tripResponse.get("waypoints");
         Map<String, Object> geometry = (Map<String, Object>) trips.get(0).get("geometry");
         List<List<Double>> coords = (List<List<Double>>) geometry.get("coordinates");
         double distanceKm = ((Number) trips.get(0).get("distance")).doubleValue() / 1000.0;
-        String geometryJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(geometry);
+        String geometryJson = mapper.writeValueAsString(geometry);
 
-        // 2. Reordenar entregas según el índice óptimo devuelto por OSRM
+        //Extraer datos originales por carretera
+        List<Map<String, Object>> routes = (List<Map<String, Object>>) routeResponse.get("routes");
+        Map<String, Object> origGeometry = (Map<String, Object>) routes.get(0).get("geometry");
+        double originalDistanceKm = ((Number) routes.get(0).get("distance")).doubleValue() / 1000.0;
+        String originalGeometryJson = mapper.writeValueAsString(origGeometry);
+
+        //Reordenar entregas
         Delivery[] orderedDeliveries = new Delivery[originalDeliveries.size()];
         for (int i = 0; i < waypoints.size(); i++) {
             int optimizedIndex = ((Number) waypoints.get(i).get("waypoint_index")).intValue();
             orderedDeliveries[optimizedIndex] = originalDeliveries.get(i);
         }
 
-        return new RouteResult(List.of(orderedDeliveries), geometryJson, coords, distanceKm);
+        return new RouteResult(List.of(orderedDeliveries), geometryJson, coords, distanceKm, originalGeometryJson, originalDistanceKm);
     }
 }

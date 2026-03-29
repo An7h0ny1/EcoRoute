@@ -55,7 +55,7 @@
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                Motor en Tiempo Real: OSRM + Datos ANI
+                Motor en Tiempo Real: OSRM + Datos ANI/INVIAS
             </div>
             <h1 class="text-5xl font-extrabold text-white tracking-tighter">EcoRoute<span class="text-emerald-500">.co</span></h1>
             <p class="text-slate-500 mt-2 font-medium">Optimización de última milla con inteligencia geoespacial.</p>
@@ -92,7 +92,16 @@
                     </svg>
                 </div>
                 <h3 id="file-name" class="text-xl font-bold text-white mb-2 tracking-tight">Cargar Manifiesto de Carga</h3>
-                <p class="text-slate-500 text-sm max-w-xs">Arrastra tu archivo CSV con las entregas para iniciar la optimización de ruta y costos.</p>
+                <p class="text-slate-500 text-sm max-w-xs mb-4">Arrastra tu archivo CSV con las entregas para iniciar la optimización de ruta y costos.</p>
+
+                <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-xs text-emerald-400/90 font-medium flex items-center gap-3 shadow-lg text-left max-w-xs group-hover:bg-emerald-500/20 transition-colors">
+                    <svg class="w-6 h-6 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="leading-relaxed">
+                    <strong class="text-emerald-400 font-bold">Nota operativa:</strong> El motor tomará la <b>primera fila</b> del documento como el punto de origen geográfico.
+                </span>
+                </div>
             </label>
 
             <div class="mt-6 relative z-10">
@@ -115,7 +124,6 @@
 
     <!-- CONTENEDOR DE RESULTADOS -->
     <div id="results-container" class="min-h-[200px]">
-        <!-- Aquí HTMX inyectará los resultados -->
         <div class="flex flex-col items-center justify-center py-20 text-slate-700 opacity-20">
             <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
             <p class="font-bold tracking-[0.3em] uppercase text-xs">Esperando Datos de Entrada</p>
@@ -123,7 +131,7 @@
     </div>
 </div>
 
-<!-- OVERLAY DE CARGA (HOUSTON ENGINE) -->
+<!-- OVERLAY DE CARGA -->
 <div id="loading-overlay" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center z-[100]">
     <div class="max-w-md w-full p-10 text-center">
         <div class="relative mb-12">
@@ -196,7 +204,7 @@
                 bar.style.width = loadingSteps[step].pct + '%';
                 step++;
             }
-        }, 800); // Más rápido, el backend ahora es muy eficiente
+        }, 800);
     });
 
     document.body.addEventListener('htmx:afterRequest', function() {

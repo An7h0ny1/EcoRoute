@@ -14,9 +14,11 @@ import java.util.List;
 public class Route {
     private String id;
     private List<Delivery> deliveries;
+    private List<Delivery> originalDeliveries;
     private RouteCost cost;
     private double totalDistanceKm;
     private String routeGeometry;
     private double savingsPercent;
     private double originalDistanceKm;
+    private String originalRouteGeometry;
 }

@@ -1,52 +1,53 @@
-# 🌱 EcoRoute.co | Motor de Optimización Logística
+# 🌱 EcoRoute.co | Optimización de Rutas Logísticas en Colombia
 
-EcoRoute es una aplicación web desarrollada para optimizar rutas de entrega de carga en Colombia. Su objetivo es reorganizar manifiestos de despacho ineficientes, trazar la ruta real por carretera, detectar los peajes en el trayecto y calcular los costos operativos.
+**EcoRoute** es una solución técnica para la gestión eficiente del transporte de carga en el territorio colombiano. El sistema procesa listas de entregas desordenadas para calcular la ruta óptima, estimar costos de peajes y reducir el impacto ambiental mediante el ahorro de combustible.
 
-## ⚙️ Funcionalidades Principales
+## 🌎 El Contexto: El reto logístico en Colombia
 
-1. **Optimización de Ruta (TSP):** Recibe un archivo CSV con entregas desordenadas y utiliza el motor de OSRM para resolver el Problema del Agente Viajero, devolviendo el orden óptimo por carretera.
-2. **Detección de Peajes (ANI, INVIAS):** Cruza la polilínea de la ruta calculada con la base de datos de peajes. Calcula el costo exacto dependiendo de la categoría del vehículo (basado en el peso ingresado).
-3. **Métricas de Impacto:** Estima el ahorro en kilómetros, el costo de combustible y la reducción de la huella de carbono (CO₂).
-4. **Despacho:** Permite exportar la ruta optimizada directamente a WhatsApp para el conductor.
+Mover carga en el país es un desafío crítico para la competitividad. EcoRoute aborda tres problemas que inflan los costos operativos:
 
-## 🧪 Guía de Prueba para el Jurado
+* **Altos Costos Logísticos:** Según [Analdex](https://analdex.org/2025/11/20/estamos-lejos-de-unos-costos-logisticos-competitivos-para-el-comercio-exterior-analdex/), Colombia sigue lejos de niveles competitivos, con costos que impactan severamente el comercio exterior.
+* **Inflación en el Transporte:** El costo del transporte de carga [subió un 4.39% en 2025](https://apnnoticias.com/el-costo-del-transporte-de-carga-subio-439-en-2025-y-prende-alertas-para-2026/), lo que ha encendido las alertas para la operación logística en 2026.
+* **Actualización de Peajes:** Con la [actualización de tarifas de la ANI e INVIAS en enero de 2026](https://www.presidencia.gov.co/prensa/Paginas/Desde-el-16-de-enero-se-actualizaran-tarifas-de-peajes-a-cargo-de-la-ANI-260110.aspx), una mala planeación de ruta puede devorar el margen de ganancia de un viaje.
 
-Para comprobar la efectividad del algoritmo, configuré un caso de prueba extremo en la plataforma.
+---
 
-**Pasos para probar:**
-1. Inicia la aplicación Spring Boot y abre `http://localhost:8080`.
-2. Haz clic en **"Descargar Plantilla de Ejemplo"**.
-   *Nota: Este CSV contiene una ruta intencionalmente desordenada (Bogotá -> Tunja -> Chía -> Villapinzón -> Cajicá -> Tocancipá) que sumaría casi 500 km si se hace en ese orden.*
-3. Sube el archivo descargado en la zona de Drag & Drop y haz clic en "Ejecutar Algoritmo".
+## 🚀 Funcionalidades Clave
+
+1.  **Optimización de Secuencia:** Reordenamiento automático de paradas (vía CSV) para minimizar el kilometraje total mediante algoritmos de ruta corta.
+2.  **Estimación de Peajes:** Cruce de la ruta con coordenadas de estaciones para calcular el costo proyectado según la categoría del vehículo.
+3.  **Métricas de Impacto:** Reporte inmediato de ahorro en distancia, costos operativos y reducción de emisiones de $CO_2$.
+4.  **Despacho Directo:** Integración para enviar la hoja de ruta optimizada al conductor a través de WhatsApp.
+
+---
+
+## 🧪 Guía de Prueba (Entorno Local)
+
+Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
+
+1.  Acceda a `http://localhost:8080`.
+2.  Descargue la **Plantilla de Ejemplo**: Este archivo simula un despacho real pero críticamente ineficiente, con paradas en este orden:
+    Bogotá ➔ Tunja ➔ Chía ➔ Villapinzón ➔ Cajicá ➔ Tocancipá.
+3.  Cargue el archivo y ejecute el algoritmo.
 
 **Resultados esperados:**
-* **Distancia:** El algoritmo reordena los puntos lógicamente de sur a norte, reduciendo el recorrido de ~496 km a ~140 km (un ahorro de más del 70%).
-* **Peajes:** El sistema detectará únicamente los peajes correspondientes a esa vía (Andes, El Roble, Albarracín), evadiendo correctamente peajes de vías paralelas (como Fusca).
-* **Mapa:** Se dibujará la ruta exacta por las carreteras usando Leaflet.
+* **Optimización:** Una ruta caótica de **412.4 km** se reduce a un trayecto lógico de **140 km**.
+* **Detección de Peajes:** Identificación de casetas (Andes, El Roble, Albarracín) con un costo estimado de referencia.
+* **Sostenibilidad:** Ahorro proyectado de **57.2 kg de $CO_2$**.
 
-## 🏗️ Arquitectura y Stack Tecnológico
+---
 
-El proyecto está construido aplicando principios SOLID y **Arquitectura Hexagonal (Puertos y Adaptadores)** para desacoplar el dominio de la infraestructura.
+## 🏗️ Stack Tecnológico
 
-**Stack Backend:**
-* Java 21 + Spring Boot 4
-* Spring Data JPA
-* Integración HTTP Reactiva (WebClient)
+* **Backend:** Java 21 / Spring Boot 4.
+* **Arquitectura:** Hexagonal (Ports & Adapters) para desacoplamiento de lógica de negocio.
+* **Frontend:** Tailwind CSS + **HTMX** (interactividad de alta velocidad).
+* **Motor Geoespacial:** OSRM (Open Source Routing Machine) y Leaflet JS.
 
-**Stack Frontend:**
-* HTML5 + Thymeleaf
-* HTMX (Para actualización dinámica del DOM sin recargar la página)
-* Tailwind CSS
-* Leaflet JS + CartoDB (Renderizado de mapas)
+---
 
-**Motores Geoespaciales:**
-* OSRM (Open Source Routing Machine) vía API.
+## ⚡ Especificaciones Técnicas y Datos
 
-## ⚡ Optimizaciones Técnicas
-
-El mayor reto de rendimiento del proyecto era cruzar la geometría de la ruta (miles de coordenadas devueltas por OSRM) contra la base de datos de peajes sin saturar el servidor.
-
-Para resolverlo, implementé la siguiente lógica en capas:
-1. **Bounding Box Dinámico (Capa DB):** Antes de procesar puntos, el backend calcula el cuadrante de la ruta completa y extrae de la base de datos solo los peajes que se encuentran en esa zona mediante una consulta nativa.
-2. **Filtro Previo Matemático (Capa Dominio):** Antes de usar la costosa función trigonométrica de Haversine para calcular distancias, se hace una resta de coordenadas (grados absolutos). Si el punto está lejos, se descarta en nanosegundos.
-3. **Radar de Alta Precisión:** El radio final de validación (Haversine) se ajustó a 150 metros (0.15 km). Esto garantiza que el sistema detecte la plaza de peaje sobre la que pasa la ruta, pero ignore peajes ubicados en carreteras paralelas o vías de servicio.
+* **Rendimiento:** Implementación de un **Bounding Box** geográfico para filtrar peajes relevantes, optimizando las consultas a la base de datos nacional.
+* **Precisión de Cruce:** Uso de la fórmula de **Haversine** con un radio de 150 metros para confirmar el paso por estación y evitar falsos positivos en vías paralelas.
+* **Nota sobre la Precisión:** Los montos de peajes son **estimaciones de referencia**. Debido a la descentralización de tarifas (ANI, Invías y concesiones privadas), los valores se basan en la última base de datos integrada y pueden variar frente al cobro real en carretera debido a actualizaciones no centralizadas.
