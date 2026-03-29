@@ -25,7 +25,7 @@ Mover carga en el país es un desafío crítico para la competitividad. EcoRoute
 
 Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
 
-1.  Acceda a `http://localhost:8080`.
+1.  Acceda a `http://108.165.47.224:8080/`.
 2.  Descargue la **Plantilla de Ejemplo**: Este archivo simula un despacho real pero críticamente ineficiente, con paradas en este orden:
     Bogotá ➔ Tunja ➔ Chía ➔ Villapinzón ➔ Cajicá ➔ Tocancipá.
 3.  Cargue el archivo y ejecute el algoritmo.
