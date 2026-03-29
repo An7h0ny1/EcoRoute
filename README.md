@@ -1,5 +1,7 @@
 # 🌱 EcoRoute.co | Optimización de Rutas Logísticas en Colombia
 
+![EcoRoute Banner](https://github.com/user-attachments/assets/adb7c3c5-ee4e-4c6c-8642-80290774e8d6)
+
 **EcoRoute** es una solución técnica para la gestión eficiente del transporte de carga en el territorio colombiano. El sistema procesa listas de entregas desordenadas para calcular la ruta óptima, estimar costos de peajes y reducir el impacto ambiental mediante el ahorro de combustible.
 
 ## 🌎 El Contexto: El reto logístico en Colombia
@@ -21,19 +23,29 @@ Mover carga en el país es un desafío crítico para la competitividad. EcoRoute
 
 ---
 
-## 🧪 Guía de Prueba (Entorno Local)
+## 🧪 Guía de Prueba (Entorno Producción)
 
-Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
+Para validar el algoritmo con datos de la ruta Bogotá - Tunja:
 
 1.  Acceda a `http://108.165.47.224:8080/`.
 2.  Descargue la **Plantilla de Ejemplo**: Este archivo simula un despacho real pero críticamente ineficiente, con paradas en este orden:
     Bogotá ➔ Tunja ➔ Chía ➔ Villapinzón ➔ Cajicá ➔ Tocancipá.
 3.  Cargue el archivo y ejecute el algoritmo.
 
+**Resultados visuales:**
+
+![Mapa Ruta Original Ineficiente](https://github.com/user-attachments/assets/a26e515e-afa1-4591-8d0d-96dfcb051088)
+![Mapa Ruta Optimizada](https://github.com/user-attachments/assets/14bc500d-dd5a-4a0d-b25d-2d7c521704b8)
+
+*Comparativa del trazado geográfico: El primer mapa representa el trayecto original (ineficiente) y el segundo muestra el cálculo optimizado por OSRM.*
+
 **Resultados esperados:**
 * **Optimización:** Una ruta caótica de **412.4 km** se reduce a un trayecto lógico de **140 km**.
 * **Detección de Peajes:** Identificación de casetas (Andes, El Roble, Albarracín) con un costo estimado de referencia.
 * **Sostenibilidad:** Ahorro proyectado de **57.2 kg de $CO_2$**.
+
+![Desglose Financiero](https://github.com/user-attachments/assets/f0eda9b9-4690-474e-9ead-701f01f0210c)
+*Desglose de costos operativos y peajes detectados en la vía.*
 
 ---
 
@@ -51,3 +63,7 @@ Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
 * **Rendimiento:** Implementación de un **Bounding Box** geográfico para filtrar peajes relevantes, optimizando las consultas a la base de datos nacional.
 * **Precisión de Cruce:** Uso de la fórmula de **Haversine** con un radio de 150 metros para confirmar el paso por estación y evitar falsos positivos en vías paralelas.
 * **Nota sobre la Precisión:** Los montos de peajes son **estimaciones de referencia**. Debido a la descentralización de tarifas (ANI, Invías y concesiones privadas), los valores se basan en la última base de datos integrada y pueden variar frente al cobro real en carretera debido a actualizaciones no centralizadas.
+
+---
+
+**© 2026 Anthony Danilo Parra.**
