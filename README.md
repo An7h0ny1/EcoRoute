@@ -58,6 +58,17 @@ Para validar el algoritmo con datos de la ruta Bogotá - Tunja:
 
 ---
 
+### ☁️ Infraestructura y Despliegue (CubePath)
+
+Para garantizar la disponibilidad y portabilidad de **EcoRoute**, la aplicación ha sido desplegada en una instancia de **Ubuntu Server** dentro de **CubePath** siguiendo una arquitectura basada en contenedores:
+
+* **📦 Dockerización:** Se creó una imagen de Docker personalizada para asegurar que la aplicación Spring Boot se ejecute de forma idéntica en cualquier entorno".
+* **🚀 Despliegue:** Se configuró **Docker Engine** en el VPS de CubePath para gestionar el ciclo de vida de la aplicación.
+* **🛡️ Resiliencia:** Se implementaron políticas de **reinicio automático** (`--restart always`).
+* **🔗 Conexión Remota:** El servidor en CubePath actúa como el núcleo de cómputo, conectándose de manera segura a una base de datos **PostgreSQL en la nube (Neon)**.
+
+---
+
 ## ⚡ Especificaciones Técnicas y Datos
 
 * **Rendimiento:** Implementación de un **Bounding Box** geográfico para filtrar peajes relevantes, optimizando las consultas a la base de datos nacional.
