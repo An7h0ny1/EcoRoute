@@ -22,7 +22,7 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OsrmRoutingAdapter implements RoutingPort {
+public class OrsRoutingAdapter implements RoutingPort {
 
     @Value("${ors.api.key}")
     private String apiKey;
