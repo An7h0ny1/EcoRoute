@@ -1,5 +1,7 @@
 # 🌱 EcoRoute.co | Optimización de Rutas Logísticas en Colombia
 
+![EcoRoute Banner](https://github.com/user-attachments/assets/adb7c3c5-ee4e-4c6c-8642-80290774e8d6)
+
 **EcoRoute** es una solución técnica para la gestión eficiente del transporte de carga en el territorio colombiano. El sistema procesa listas de entregas desordenadas para calcular la ruta óptima, estimar costos de peajes y reducir el impacto ambiental mediante el ahorro de combustible.
 
 ## 🌎 El Contexto: El reto logístico en Colombia
@@ -12,7 +14,7 @@ Mover carga en el país es un desafío para la competitividad. EcoRoute aborda t
 
 ---
 
-## 🚀 Funcionalidades Clave
+## 🚀 Funcionalidades
 
 1.  **Optimización VROOM Engine:** Reordenamiento automático de paradas mediante el algoritmo **VROOM** para minimizar el kilometraje total considerando eficiencia de giro y tiempos.
 2.  **Rutas Carga-Sensibles (HGV vs. LGV):** El sistema detecta si la carga supera las 3.5 toneladas y recalcula la ruta usando restricciones de **Vehículos de Carga Pesada (HGV)**.
@@ -21,34 +23,59 @@ Mover carga en el país es un desafío para la competitividad. EcoRoute aborda t
 
 ---
 
-## 🧪 Guía de Prueba
+## 🧪 Guía de Prueba (Entorno Producción)
 
-Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
+Para validar el algoritmo con datos de la ruta Bogotá - Tunja:
 
 1.  Acceda a `http://108.165.47.224:8080/`.
 2.  Descargue la **Plantilla de Ejemplo**: Este archivo simula un despacho real pero críticamente ineficiente, con paradas en este orden:
     Bogotá ➔ Tunja ➔ Chía ➔ Villapinzón ➔ Cajicá ➔ Tocancipá.
 3.  Cargue el archivo y ejecute el algoritmo.
 
+**Resultados visuales:**
+
+![Mapa Ruta Original Ineficiente](https://github.com/user-attachments/assets/0d3b26ac-b6da-482d-91ba-c33e342294a9)
+![Mapa Ruta Optimizada](https://github.com/user-attachments/assets/1afc2f88-e650-4b3d-953c-f26ce72ca2d3)
+
+*Comparativa del trazado geográfico: El primer mapa representa el trayecto original (ineficiente) y el segundo muestra el cálculo optimizado por OSRM.*
+
 **Resultados esperados:**
 * **Inteligencia de Flota:** El sistema detectará los pesos y asignará el perfil de vehículo correcto.
-* **Optimización:** Una ruta caótica de **412.4 km** se reduce a un trayecto lógico de **140 km**.
+* **Ahorro Drástico:**Reducción del kilometraje de **~400km a ~145km.**.
 * **Detección de Peajes:** Identificación de casetas (Andes, El Roble, Albarracín) con un costo estimado de referencia.
-* **Sostenibilidad:** Ahorro proyectado de **57.2 kg de $CO_2$**.
+* **Sostenibilidad:** Ahorro proyectado de **55.2 kg de $CO_2$**.
+
+![Desglose Financiero](https://github.com/user-attachments/assets/bf2a905b-5c9c-4286-a1a6-33c808b03b60)
+*Desglose de costos operativos y peajes detectados en la vía.*
 
 ---
 
 ## 🏗️ Stack Tecnológico
 
-* **Backend:** Java 21 / Spring Boot 3.3 (LTS).
+* **Backend:** Java 21 / Spring Boot 4.
 * **Arquitectura:** Hexagonal (Ports & Adapters) para desacoplamiento de lógica de negocio.
 * **Frontend:** Tailwind CSS + **HTMX** (interactividad de alta velocidad).
-* **Motor Geoespacial:** OpenRouteService API + **VROOM Optimization Engine** y Leaflet JS.
+* **Motor de Optimización:** OpenRouteService API + VROOM Optimization Engine.
+
+---
+
+### ☁️ Infraestructura y Despliegue (CubePath)
+
+Para garantizar la disponibilidad y portabilidad de **EcoRoute**, la aplicación ha sido desplegada en una instancia de **Ubuntu Server** dentro de **CubePath** siguiendo una arquitectura basada en contenedores:
+
+* **📦 Dockerización:** Se creó una imagen de Docker personalizada para asegurar que la aplicación Spring Boot se ejecute de forma idéntica en cualquier entorno".
+* **🚀 Despliegue:** Se configuró **Docker Engine** en el VPS de CubePath para gestionar el ciclo de vida de la aplicación.
+* **🛡️ Resiliencia:** Se implementaron políticas de **reinicio automático** (`--restart always`).
+* **🔗 Conexión Remota:** El servidor en CubePath actúa como el núcleo de cómputo, conectándose de manera segura a una base de datos **PostgreSQL en la nube (Neon)**.
 
 ---
 
 ## ⚡ Especificaciones Técnicas y Datos
 
-* **Rendimiento:** Implementación de un **Bounding Box** geográfico para filtrar peajes relevantes, optimizando las consultas a la base de datos nacional.
-* **Precisión de Cruce:** Uso de la fórmula de **Haversine** con un radio de 150 metros para confirmar el paso por estación y evitar falsos positivos en vías paralelas.
+* **Robustez de Datos:** Parser de CSV con soporte para codificación UTF-8, manejo de comillas en direcciones y validación estricta de coordenadas.
+* **Performance:** Uso de procesamiento en paralelo para el filtrado de peajes en rutas de larga distancia.
 * **Nota sobre la Precisión:** Los montos de peajes son **estimaciones de referencia**. Debido a la descentralización de tarifas (ANI, Invías y concesiones privadas), los valores se basan en la última base de datos integrada y pueden variar frente al cobro real en carretera debido a actualizaciones no centralizadas.
+
+---
+
+**© 2026 Anthony Danilo Parra.**
