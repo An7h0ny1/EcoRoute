@@ -1,14 +1,27 @@
 <div th:fragment="route-results" class="space-y-8 animate-fade-in pb-12">
 
     <!-- HEADER DE IMPACTO: COMPARATIVA -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- PERFIL DE VEHÍCULO -->
+        <div class="glass bg-indigo-500/10 border-indigo-500/30 rounded-3xl p-6 relative overflow-hidden">
+            <div class="absolute -right-2 -top-2 opacity-20">
+                <svg th:if="${route.vehicleType.contains('Pesada')}" class="w-16 h-16 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+                <svg th:if="${route.vehicleType.contains('Liviana')}" class="w-16 h-16 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-13 1.5-13 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+            </div>
+            <p class="text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Restricción de Red</p>
+            <h3 class="text-xl font-black text-white" th:text="${route.vehicleType}"></h3>
+            <p class="text-[9px] text-indigo-300/60 mt-2 italic">Ruta calculada evitando zonas de restricción para este tonelaje.</p>
+        </div>
         <!-- Tarjeta Distancia Original (Gris/Rojo) -->
         <div class="glass bg-slate-900/40 border-slate-700/50 rounded-3xl p-6 relative overflow-hidden group">
-            <div class="absolute -right-4 -top-4 opacity-10 group-hover:scale-110 transition-transform">
-                <svg class="w-24 h-24 text-slate-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
-            </div>
             <p class="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Ruta Convencional</p>
             <h3 class="text-3xl font-light text-slate-400" th:text="${#numbers.formatDecimal(route.originalDistanceKm, 1, 1)} + ' km'"></h3>
+
+            <!-- NUEVO: Costo proyectado en la ruta mala -->
+            <p class="text-[11px] text-red-400/60 mt-2 font-mono">
+                COSTO EST.: <span th:text="'$' + ${#numbers.formatDecimal(route.originalTotalCost, 0, 'POINT', 0, 'COMMA')}"></span>
+            </p>
+
             <div class="mt-4 flex items-center gap-2 text-xs text-red-400/80 italic">
                 <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                 Logística No Optimizada
@@ -25,6 +38,9 @@
             <div class="mt-3 inline-flex items-center gap-2 bg-emerald-500 text-slate-900 px-3 py-1 rounded-full text-xs font-bold shadow-lg">
                 <span th:text="${route.savingsPercent} + '% DE AHORRO'"></span>
             </div>
+            <p class="text-[10px] text-emerald-300/80 mt-2 font-mono">
+                AHORRO ESTIMADO: <span class="font-bold" th:text="'$' + ${#numbers.formatDecimal(route.totalSavingsCop, 0, 'POINT', 0, 'COMMA')}"></span> COP
+            </p>
         </div>
 
         <!-- Tarjeta Huella de Carbono -->
@@ -51,7 +67,7 @@
                     <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
                     Trazado Geoespacial de Entrega
                 </h2>
-                <p class="text-[10px] text-slate-500 uppercase tracking-widest ml-4 mt-1">Cálculo en tiempo real vía Motor OSRM</p>
+                <p class="text-[10px] text-slate-500 uppercase tracking-widest ml-4 mt-1">Cálculo en tiempo real vía ORS</p>
             </div>
 
             <!-- Controles Interactivos para el Pitch -->
@@ -110,7 +126,7 @@
         <div class="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
             <div>
                 <h2 class="text-2xl font-black text-white tracking-tight">Secuencia de Despacho</h2>
-                <p class="text-slate-400 text-sm italic">Optimizado mediante Heurística del Vecino más Cercano.</p>
+                <p class="text-slate-400 text-sm italic">Optimizado mediante Motor VROOM (Vehicle Routing Open-Source Optimization).</p>
             </div>
             <button onclick="sendWhatsApp()"
                     class="w-full md:w-auto flex items-center justify-center gap-4 bg-[#25D366] hover:bg-[#20ba5a] hover:scale-105 text-white font-black py-4 px-10 rounded-2xl transition-all shadow-[0_10px_20px_rgba(37,211,102,0.2)] active:scale-95 group">
@@ -198,25 +214,31 @@
                 }
             }
 
-            // DIBUJAR LA RUTA OPTIMIZADA
+            // DIBUJAR LA RUTA OPTIMIZADA CON ANIMACIÓN
             var routeGeometry = /*[[${route.routeGeometry}]]*/ null;
             if (routeGeometry) {
                 try {
                     var geomObj = typeof routeGeometry === 'string' ? JSON.parse(routeGeometry) : routeGeometry;
+
+                    // Creamos la capa pero con opacidad 0 inicialmente
                     var routeLayer = L.geoJSON(geomObj, {
-                        // Verde esmeralda vibrante
-                        style: { color: '#10b981', weight: 6, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }
+                        style: { color: '#10b981', weight: 6, opacity: 0, lineCap: 'round', lineJoin: 'round' }
                     }).addTo(window.ecoRouteMap);
 
-                    // Auto-encuadre del mapa para que abarque todo el recorrido
-                    var bounds = routeLayer.getBounds();
-                    if (originalLayer) {
-                        bounds.extend(originalLayer.getBounds());
+                    // Animación simple: aparecer progresivamente
+                    var path = document.querySelector(".leaflet-interactive");
+                    if(path) {
+                        path.style.strokeDasharray = path.getTotalLength();
+                        path.style.strokeDashoffset = path.getTotalLength();
+                        path.style.transition = "stroke-dashoffset 3s ease-in-out, opacity 0.5s";
+                        setTimeout(() => {
+                            path.style.strokeDashoffset = "0";
+                            routeLayer.setStyle({opacity: 0.9});
+                        }, 500);
                     }
-                    window.ecoRouteMap.fitBounds(bounds, {padding:[50, 50]});
-                } catch(e) {
-                    console.error("Error parseando geometría GeoJSON", e);
-                }
+
+                    window.ecoRouteMap.fitBounds(routeLayer.getBounds(), {padding:[50, 50]});
+                } catch(e) { console.error(e); }
             }
 
             // --- Lógica de Botones Interactivos ---

@@ -21,4 +21,7 @@ public class Route {
     private double savingsPercent;
     private double originalDistanceKm;
     private String originalRouteGeometry;
+    private String vehicleType;
+    private double totalSavingsCop;
+    private double originalTotalCost;
 }

@@ -55,7 +55,7 @@
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                Motor en Tiempo Real: OSRM + Datos ANI/INVIAS
+                Motor en Tiempo Real: ORS + Datos ANI/INVIAS
             </div>
             <h1 class="text-5xl font-extrabold text-white tracking-tighter">EcoRoute<span class="text-emerald-500">.co</span></h1>
             <p class="text-slate-500 mt-2 font-medium">Optimización de última milla con inteligencia geoespacial.</p>
@@ -183,7 +183,7 @@
     // Lógica de simulación de carga adaptativa
     const loadingSteps =[
         { title: "Analizando Dataset", sub: "Validando coordenadas y pesos de carga...", pct: 20 },
-        { title: "Engine OSRM TSP", sub: "Calculando matriz matemática de distancias...", pct: 50 },
+        { title: "Engine ORS TSP", sub: "Calculando matriz matemática de distancias...", pct: 50 },
         { title: "Geo-Filtro ANI", sub: "Buscando peajes con Bounding Box...", pct: 80 },
         { title: "Eco-Matching", sub: "Procesando huella de carbono y finanzas...", pct: 95 }
     ];

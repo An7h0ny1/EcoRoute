@@ -4,7 +4,7 @@
 
 ## 🌎 El Contexto: El reto logístico en Colombia
 
-Mover carga en el país es un desafío crítico para la competitividad. EcoRoute aborda tres problemas que inflan los costos operativos:
+Mover carga en el país es un desafío para la competitividad. EcoRoute aborda tres problemas que inflan los costos operativos:
 
 * **Altos Costos Logísticos:** Según [Analdex](https://analdex.org/2025/11/20/estamos-lejos-de-unos-costos-logisticos-competitivos-para-el-comercio-exterior-analdex/), Colombia sigue lejos de niveles competitivos, con costos que impactan severamente el comercio exterior.
 * **Inflación en el Transporte:** El costo del transporte de carga [subió un 4.39% en 2025](https://apnnoticias.com/el-costo-del-transporte-de-carga-subio-439-en-2025-y-prende-alertas-para-2026/), lo que ha encendido las alertas para la operación logística en 2026.
@@ -14,14 +14,14 @@ Mover carga en el país es un desafío crítico para la competitividad. EcoRoute
 
 ## 🚀 Funcionalidades Clave
 
-1.  **Optimización de Secuencia:** Reordenamiento automático de paradas (vía CSV) para minimizar el kilometraje total mediante algoritmos de ruta corta.
-2.  **Estimación de Peajes:** Cruce de la ruta con coordenadas de estaciones para calcular el costo proyectado según la categoría del vehículo.
-3.  **Métricas de Impacto:** Reporte inmediato de ahorro en distancia, costos operativos y reducción de emisiones de $CO_2$.
+1.  **Optimización VROOM Engine:** Reordenamiento automático de paradas mediante el algoritmo **VROOM** para minimizar el kilometraje total considerando eficiencia de giro y tiempos.
+2.  **Rutas Carga-Sensibles (HGV vs. LGV):** El sistema detecta si la carga supera las 3.5 toneladas y recalcula la ruta usando restricciones de **Vehículos de Carga Pesada (HGV)**.
+3.  **Auditoría de Costos Comparativa:** Cálculo del "Daño Económico" de la ruta convencional vs. el beneficio de EcoRoute, comparando combustible y peajes.
 4.  **Despacho Directo:** Integración para enviar la hoja de ruta optimizada al conductor a través de WhatsApp.
 
 ---
 
-## 🧪 Guía de Prueba (Entorno Local)
+## 🧪 Guía de Prueba
 
 Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
 
@@ -31,6 +31,7 @@ Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
 3.  Cargue el archivo y ejecute el algoritmo.
 
 **Resultados esperados:**
+* **Inteligencia de Flota:** El sistema detectará los pesos y asignará el perfil de vehículo correcto.
 * **Optimización:** Una ruta caótica de **412.4 km** se reduce a un trayecto lógico de **140 km**.
 * **Detección de Peajes:** Identificación de casetas (Andes, El Roble, Albarracín) con un costo estimado de referencia.
 * **Sostenibilidad:** Ahorro proyectado de **57.2 kg de $CO_2$**.
@@ -39,10 +40,10 @@ Para validar el algoritmo con datos reales de la ruta Bogotá - Tunja:
 
 ## 🏗️ Stack Tecnológico
 
-* **Backend:** Java 21 / Spring Boot 4.
+* **Backend:** Java 21 / Spring Boot 3.3 (LTS).
 * **Arquitectura:** Hexagonal (Ports & Adapters) para desacoplamiento de lógica de negocio.
 * **Frontend:** Tailwind CSS + **HTMX** (interactividad de alta velocidad).
-* **Motor Geoespacial:** OSRM (Open Source Routing Machine) y Leaflet JS.
+* **Motor Geoespacial:** OpenRouteService API + **VROOM Optimization Engine** y Leaflet JS.
 
 ---
 
