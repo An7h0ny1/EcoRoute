@@ -41,7 +41,7 @@ Para validar el algoritmo con datos de la ruta Bogotá - Tunja:
 
 **Resultados esperados:**
 * **Inteligencia de Flota:** El sistema detectará los pesos y asignará el perfil de vehículo correcto.
-* **Ahorro Drástico:**Reducción del kilometraje de **~400km a ~145km.**.
+* **Ahorro Drástico:** Reducción del kilometraje de **~400km a ~145km.**.
 * **Detección de Peajes:** Identificación de casetas (Andes, El Roble, Albarracín) con un costo estimado de referencia.
 * **Sostenibilidad:** Ahorro proyectado de **55.2 kg de $CO_2$**.
 
